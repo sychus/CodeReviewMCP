@@ -36,7 +36,7 @@ Transform your code review process with intelligent automation that analyzes Git
 
 ### MCP Configuration
 
-Before using this tool, you need to configure the GitHub MCP server with Claude Code. For detailed instructions, visit the [Claude Code project](https://github.com/anthropic/claude-3-5-sonnet-20241022).
+Before using this tool, you need to configure the GitHub MCP server with Claude Code. For detailed instructions, visit the [Claude Code project](https://github.com/anthropics/claude-code).
 
 #### 1. **Setup GitHub MCP Server**
 
