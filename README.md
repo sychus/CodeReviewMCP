@@ -247,7 +247,7 @@ bash -n codereview.sh
    claude mcp restart github
    ```
 
-For more detailed MCP troubleshooting, refer to the [Claude Code documentation](https://github.com/anthropic/claude-3-5-sonnet-20241022).
+For more detailed MCP troubleshooting, refer to the [Claude Code documentation](https://github.com/anthropics/claude-code).
 
 ## 📋 Requirements
 
@@ -289,9 +289,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔗 Related Projects
 
-- [Claude CLI](https://github.com/anthropics/claude-cli) - Command-line interface for Claude
+- [Claude CODE](https://github.com/anthropics/claude-code) - Command-line interface for Claude
 - [MCP Servers](https://github.com/modelcontextprotocol/servers) - Official MCP server implementations
-- [GitHub CLI](https://github.com/cli/cli) - GitHub's official CLI tool
 
 ---
 
