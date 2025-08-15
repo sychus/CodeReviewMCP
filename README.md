@@ -29,7 +29,7 @@ Transform your code review process with intelligent automation that analyzes Git
 ### Prerequisites
 
 - **Node.js** (v18 or higher)
-- **Claude CLI** - Install with: `npm install -g claude-cli`
+- **Claude CODE** - Install with: `npm install -g @anthropic-ai/claude-code`
 - **Docker** - Required for running MCP servers
 - **GitHub Personal Access Token** - For API access
 - **GitHub MCP Server** configured with Claude (see setup below)
