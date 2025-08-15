@@ -1,6 +1,8 @@
 #!/bin/bash
 
 # codereview - Automated Code Review Script with GitHub MCP via claude-cli
+# Author: sychus (https://github.com/sychus)
+# Repository: https://github.com/sychus/codereview-mcp-claude-code
 # Usage: codereview review.md <URL>
 # Example: codereview review.md https://github.com/user/repo/pull/123
 
@@ -59,12 +61,7 @@ if ! command -v claude &>/dev/null; then
     exit 1
 fi
 
-if ! command -v jq &>/dev/null; then
-    print_status "error" "jq is required but not installed. Install with: brew install jq"
-    exit 1
-fi
-
-print_status "success" "Prerequisites check passed (Claude CLI + jq ready)"
+print_status "success" "Prerequisites check passed (Claude CLI ready)"
 
 # Function: generate automated MCP prompt
 execute_automated_mcp_review() {
