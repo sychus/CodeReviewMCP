@@ -28,7 +28,7 @@ Transform your code review process with intelligent automation that analyzes Git
 
 ### Prerequisites
 
-- **Node.js** (v16 or higher)
+- **Node.js** (v18 or higher)
 - **Claude CLI** - Install with: `npm install -g claude-cli`
 - **Docker** - Required for running MCP servers
 - **GitHub Personal Access Token** - For API access
