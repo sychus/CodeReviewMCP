@@ -30,7 +30,35 @@ Transform your code review process with intelligent automation that analyzes Git
 
 - **Node.js** (v16 or higher)
 - **Claude CLI** - Install with: `npm install -g claude-cli`
-- **GitHub MCP Server** configured with Claude
+- **Docker** - Required for running MCP servers
+- **GitHub Personal Access Token** - For API access
+- **GitHub MCP Server** configured with Claude (see setup below)
+
+### MCP Configuration
+
+Before using this tool, you need to configure the GitHub MCP server with Claude Code. For detailed instructions, visit the [Claude Code project](https://github.com/anthropic/claude-3-5-sonnet-20241022).
+
+#### 1. **Setup GitHub MCP Server**
+
+First, create a GitHub Personal Access Token:
+- Go to GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
+- Generate a new token with the following scopes: `repo`, `pull_requests`, `issues`
+
+Then configure the GitHub MCP server:
+```bash
+claude mcp add github -s user -e GITHUB_PERSONAL_ACCESS_TOKEN=$MY_GITHUB_ACCESS_TOKEN... -- docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server
+```
+
+Replace `$MY_GITHUB_ACCESS_TOKEN...` with your actual GitHub Personal Access Token.
+
+#### 2. **Verify MCP Configuration**
+
+Check that the GitHub MCP is properly configured:
+```bash
+claude mcp list
+```
+
+You should see `github` in the list of configured MCP servers.
 
 ### Installation
 
@@ -43,12 +71,6 @@ Transform your code review process with intelligent automation that analyzes Git
 2. **Make the script executable:**
    ```bash
    chmod +x codereview.sh
-   ```
-
-3. **Setup Claude CLI with GitHub MCP:**
-   ```bash
-   # Configure Claude CLI with your GitHub MCP server
-   claude config set mcp.github.enabled true
    ```
 
 ### Basic Usage
@@ -189,11 +211,50 @@ codereview-mcp-claude-code/
 bash -n codereview.sh
 ```
 
+## 🛠️ Troubleshooting
+
+### Common Issues
+
+1. **Claude CLI not found**
+   ```bash
+   npm install -g claude-cli
+   ```
+
+2. **GitHub MCP not configured**
+   - Verify with: `claude mcp list`
+   - If missing, follow the MCP Configuration section above
+   - Ensure your GitHub token has correct permissions (`repo`, `pull_requests`, `issues`)
+
+3. **Permission denied**
+   ```bash
+   chmod +x codereview.sh
+   ```
+
+4. **Docker not running**
+   - Ensure Docker is installed and running
+   - Test with: `docker --version`
+
+5. **GitHub API rate limits**
+   - Use a GitHub Personal Access Token for higher rate limits
+   - Verify token is not expired
+
+6. **MCP server connection issues**
+   ```bash
+   # Test MCP connectivity
+   claude mcp test github
+   
+   # Restart MCP server if needed
+   claude mcp restart github
+   ```
+
+For more detailed MCP troubleshooting, refer to the [Claude Code documentation](https://github.com/anthropic/claude-3-5-sonnet-20241022).
+
 ## 📋 Requirements
 
 | Component | Version | Purpose |
 |-----------|---------|---------|
 | Claude CLI | Latest | AI-powered code analysis |
+| Docker | Latest | MCP server containerization |
 | Bash | 4.0+ | Script execution |
 | GitHub MCP | Latest | GitHub API integration |
 
