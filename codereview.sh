@@ -118,7 +118,7 @@ $context_content
 1. **Get PR Details**: Use GitHub MCP tool \`github:get_pull_request\` with owner: "$OWNER", repo: "$REPO", pull_number: $PR_NUMBER
 2. **Get PR Files**: Use GitHub MCP tool \`github:get_pull_request_files\` with owner: "$OWNER", repo: "$REPO", pull_number: $PR_NUMBER  
 3. **Analyze Key Files**: Use GitHub MCP tool \`github:get_file_contents\` for the most important changed files (max 3-5 files)
-4. **Generate Review**: Create comprehensive code review following the specified format
+4. **Generate Review**: Create comprehensive code review following the specified format (DO NOT include any footer or signature such as "Generated with Claude Code")
 5. **Post Review**: Use GitHub MCP tool \`github:create_pull_request_review\` with:
    - owner: "$OWNER"
    - repo: "$REPO" 
@@ -140,6 +140,7 @@ $context_content
 \`\`\`
 
 **IMPORTANT**: Execute all steps automatically using ONLY GitHub MCP tools.
+**CRITICAL**: Do NOT add any footer, signature, or attribution like "Generated with Claude Code" at the end of your review. The review should end with the Summary section only.
 
 ---
 
