@@ -12,7 +12,7 @@ Transform your code review process with intelligent automation that analyzes Git
 
 **sychus** - *Creator and Maintainer*
 - GitHub: [@sychus](https://github.com/sychus)
-- Repository: [codereview-mcp-claude-code](https://github.com/sychus/codereview-mcp-claude-code)
+- Repository: [CodeReviewMCP](https://github.com/sychus/CodeReviewMCP)
 
 ## ✨ Features
 
@@ -70,8 +70,8 @@ You should see `github` in the list of configured MCP servers.
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/sychus/codereview-mcp-claude-code.git
-   cd codereview-mcp-claude-code
+   git clone git@github.com:sychus/CodeReviewMCP.git
+   cd CodeReviewMCP
    ```
 
 2. **Make the script executable:**
