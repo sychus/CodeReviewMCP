@@ -1,6 +1,6 @@
-# Contributing to CodeReview MCP Claude
+# Contributing to CodeReview MCP (Claude & Gemini)
 
-First off, thank you for considering contributing to CodeReview MCP Claude! 🎉
+First off, thank you for considering contributing to CodeReview MCP! 🎉
 
 ## Code of Conduct
 
@@ -52,6 +52,8 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
    ```bash
    # Install Claude CLI if not already installed
    npm install -g claude-cli
+   # Optionally, install Gemini CLI if you want to test Gemini support
+   # (Refer to Gemini CLI documentation for installation instructions)
    ```
 
 3. **Make the script executable:**
@@ -67,9 +69,15 @@ Before submitting a pull request, please test your changes:
 # Test script syntax
 bash -n codereview.sh
 
-# Test with a sample PR
+# Test with a sample PR using Claude CLI
+./codereview.sh review.md https://github.com/octocat/Hello-World/pull/1
+
+# If you have Gemini CLI installed, also test:
 ./codereview.sh review.md https://github.com/octocat/Hello-World/pull/1
 ```
+
+- If both CLIs are installed, ensure the script prompts for selection and works with both.
+- If only one CLI is installed, ensure it works without prompting.
 
 ### Coding Standards
 
@@ -100,13 +108,13 @@ Examples:
 
 ```
 codereview-mcp-claude-code/
-├── codereview.sh           # Main automation script
+├── codereview.sh           # Main automation script (Claude & Gemini)
 ├── review.md               # Default review guidelines  
-├── .gitignore             # Git ignore patterns
-├── README.md              # Project documentation
-├── LICENSE                # MIT license
-├── CONTRIBUTING.md        # This file
-└── examples/              # Example configurations (optional)
+├── .gitignore              # Git ignore patterns
+├── README.md               # Project documentation
+├── LICENSE                 # License
+├── CONTRIBUTING.md         # This file
+└── examples/               # Example configurations (optional)
 ```
 
 ## Areas for Contribution

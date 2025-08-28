@@ -1,8 +1,7 @@
 #!/bin/bash
 
-# codereview - Portable Automated Code Review Script
-# Usage: codereview review.md <URL>
-# Uses existing Claude Code configuration from ~/.claude.json
+# codereview.sh - Unified Automated Code Review Script (Claude & Gemini)
+# Usage: codereview.sh review.md <URL>
 
 # Color codes
 RED='\033[0;31m'
@@ -16,11 +15,11 @@ print_status() {
     local status="$1"
     local message="$2"
     case $status in
-        "info") echo -e "${CYAN}ℹ${NC}  $message" ;;
-        "success") echo -e "${GREEN}✅${NC} $message" ;;
-        "warning") echo -e "${YELLOW}⚠️${NC}  $message" ;;
-        "error") echo -e "${RED}❌${NC} $message" ;;
-        "progress") echo -e "${BLUE}🔄${NC} $message" ;;
+        "info") echo -e "${CYAN}\u2139${NC}  $message" ;;
+        "success") echo -e "${GREEN}\u2705${NC} $message" ;;
+        "warning") echo -e "${YELLOW}\u26a0\ufe0f${NC}  $message" ;;
+        "error") echo -e "${RED}\u274c${NC} $message" ;;
+        "progress") echo -e "${BLUE}\ud83d\udd04${NC} $message" ;;
     esac
 }
 
@@ -45,18 +44,63 @@ if [ ! -f "$CONTEXT_FILE" ]; then
     exit 1
 fi
 
-# Check if Claude config exists
-CLAUDE_CONFIG="$HOME/.claude.json"
-if [ ! -f "$CLAUDE_CONFIG" ]; then
-    print_status "error" "Claude config file '$CLAUDE_CONFIG' not found"
-    print_status "info" "Please ensure you have Claude Code configured with MCP servers"
+# Tool detection
+HAS_CLAUDE=false
+HAS_GEMINI=false
+if command -v claude &>/dev/null; then
+    HAS_CLAUDE=true
+fi
+if command -v gemini &>/dev/null; then
+    HAS_GEMINI=true
+fi
+
+if ! $HAS_CLAUDE && ! $HAS_GEMINI; then
+    print_status "error" "Neither Claude CLI nor Gemini CLI found. Please install at least one."
     exit 1
 fi
 
-# Check if GitHub MCP is configured
-if ! grep -q '"github"' "$CLAUDE_CONFIG"; then
-    print_status "warning" "GitHub MCP not found in Claude config"
-    print_status "info" "Please configure GitHub MCP first with: claude mcp add github"
+# Select tool if both are present
+if $HAS_CLAUDE && $HAS_GEMINI; then
+    print_status "info" "Both Claude and Gemini are installed."
+    echo "Select which CLI to use for the review:"
+    select TOOL in "claude" "gemini"; do
+        case $TOOL in
+            claude) SELECTED_TOOL="claude"; break ;;
+            gemini) SELECTED_TOOL="gemini"; break ;;
+            *) echo "Invalid option. Please select 1 or 2." ;;
+        esac
+    done
+elif $HAS_CLAUDE; then
+    SELECTED_TOOL="claude"
+    print_status "info" "Using Claude CLI."
+elif $HAS_GEMINI; then
+    SELECTED_TOOL="gemini"
+    print_status "info" "Using Gemini CLI."
+fi
+
+# Config and prompt logic
+if [ "$SELECTED_TOOL" = "claude" ]; then
+    CLAUDE_CONFIG="$HOME/.claude.json"
+    if [ ! -f "$CLAUDE_CONFIG" ]; then
+        print_status "error" "Claude config file '$CLAUDE_CONFIG' not found"
+        print_status "info" "Please ensure you have Claude Code configured with MCP servers"
+        exit 1
+    fi
+    if ! grep -q '"github"' "$CLAUDE_CONFIG"; then
+        print_status "warning" "GitHub MCP not found in Claude config"
+        print_status "info" "Please configure GitHub MCP first with: claude mcp add github"
+    fi
+elif [ "$SELECTED_TOOL" = "gemini" ]; then
+    GEMINI_CONFIG="$HOME/.gemini/settings.json"
+    if [ ! -f "$GEMINI_CONFIG" ]; then
+        print_status "error" "Gemini config file '$GEMINI_CONFIG' not found"
+        print_status "info" "Please ensure you have Gemini configured with MCP servers"
+        exit 1
+    fi
+    if ! grep -q '"github"' "$GEMINI_CONFIG"; then
+        print_status "warning" "GitHub MCP not found in Gemini config"
+        print_status "info" "Please configure GitHub MCP first in .gemini/settings.json"
+    fi
 fi
 
 # Extract repo info
@@ -71,20 +115,12 @@ else
     exit 1
 fi
 
-# Check tools
-if ! command -v claude &>/dev/null; then
-    print_status "error" "Claude CLI is required but not found"
-    exit 1
-fi
-
 print_status "success" "Prerequisites check passed"
-print_status "info" "Using Claude config: $CLAUDE_CONFIG"
 
-# Function: generate automated MCP prompt
-execute_automated_mcp_review() {
+# Prompt generation functions
+execute_automated_claude_review() {
     local context_content
     context_content=$(cat "$CONTEXT_FILE" | sed "s|{URL_PARAMETER}|$URL|g")
-    
     cat << EOF
 ## 🚨 CRITICAL TOOL RESTRICTIONS
 **MANDATORY**: You MUST ONLY use GitHub MCP server tools. DO NOT use any bash commands, CLI tools, or external commands.
@@ -115,11 +151,11 @@ $context_content
 
 ### Required Actions (Execute in sequence):
 
-1. **Get PR Details**: Use GitHub MCP tool \`github:get_pull_request\` with owner: "$OWNER", repo: "$REPO", pull_number: $PR_NUMBER
-2. **Get PR Files**: Use GitHub MCP tool \`github:get_pull_request_files\` with owner: "$OWNER", repo: "$REPO", pull_number: $PR_NUMBER  
-3. **Analyze Key Files**: Use GitHub MCP tool \`github:get_file_contents\` for the most important changed files (max 3-5 files)
+1. **Get PR Details**: Use GitHub MCP tool `github:get_pull_request` with owner: "$OWNER", repo: "$REPO", pull_number: $PR_NUMBER
+2. **Get PR Files**: Use GitHub MCP tool `github:get_pull_request_files` with owner: "$OWNER", repo: "$REPO", pull_number: $PR_NUMBER  
+3. **Analyze Key Files**: Use GitHub MCP tool `github:get_file_contents` for the most important changed files (max 3-5 files)
 4. **Generate Review**: Create comprehensive code review following the specified format (DO NOT include any footer or signature such as "Generated with Claude Code")
-5. **Post Review**: Use GitHub MCP tool \`github:create_pull_request_review\` with:
+5. **Post Review**: Use GitHub MCP tool `github:create_pull_request_review` with:
    - owner: "$OWNER"
    - repo: "$REPO" 
    - pull_number: $PR_NUMBER
@@ -127,7 +163,7 @@ $context_content
    - event: "COMMENT" or "REQUEST_CHANGES" or "APPROVE" based on findings
 
 ### Output Format Required:
-\`\`\`json
+```json
 {
   "status": "success|error",
   "review_posted": true|false,
@@ -137,7 +173,7 @@ $context_content
   "issues_found": number,
   "summary": "Brief summary of what was done"
 }
-\`\`\`
+```
 
 **IMPORTANT**: Execute all steps automatically using ONLY GitHub MCP tools.
 **CRITICAL**: Do NOT add any footer, signature, or attribution like "Generated with Claude Code" at the end of your review. The review should end with the Summary section only.
@@ -148,25 +184,103 @@ $context_content
 EOF
 }
 
+execute_automated_gemini_review() {
+    local context_content
+    context_content=$(cat "$CONTEXT_FILE" | sed "s|{URL_PARAMETER}|$URL|g")
+    cat << EOF
+## 🚨 CRITICAL TOOL RESTRICTIONS
+**MANDATORY**: You MUST ONLY use GitHub MCP server tools. DO NOT use any bash commands, CLI tools, or external commands.
+
+**FORBIDDEN COMMANDS**: 
+- gh (GitHub CLI)
+- curl 
+- git commands
+- bash commands for GitHub operations
+
+**REQUIRED**: Use ONLY these GitHub MCP tools:
+- github:get_pull_request OR mcp_github_get_pull_request
+- github:get_pull_request_files OR mcp_github_get_pull_request_files  
+- github:get_file_contents OR mcp_github_get_file_contents
+- github:create_pull_request_review OR mcp_github_create_pull_request_review
+
+---
+
+$context_content
+
+## 🤖 AUTOMATED EXECUTION MODE
+
+### GitHub Information
+- **URL**: $URL
+- **Owner**: $OWNER  
+- **Repository**: $REPO
+- **Pull Request**: #$PR_NUMBER
+
+### Required Actions (Execute in sequence):
+
+1. **Get PR Details**: Use available GitHub MCP tool (try `github:get_pull_request` first, if not available use `mcp_github_get_pull_request`) with owner: "$OWNER", repo: "$REPO", pull_number: $PR_NUMBER
+2. **Get PR Files**: Use available GitHub MCP tool (try `github:get_pull_request_files` first, if not available use `mcp_github_get_pull_request_files`) with owner: "$OWNER", repo: "$REPO", pull_number: $PR_NUMBER  
+3. **Analyze Key Files**: Use available GitHub MCP tool (try `github:get_file_contents` first, if not available use `mcp_github_get_file_contents`) for the most important changed files (max 3-5 files)
+4. **Generate Review**: Create comprehensive code review following the specified format (DO NOT include any footer or signature such as "Generated with Gemini")
+5. **Post Review**: Use available GitHub MCP tool (try `github:create_pull_request_review` first, if not available use `mcp_github_create_pull_request_review`) with:
+   - owner: "$OWNER"
+   - repo: "$REPO" 
+   - pull_number: $PR_NUMBER
+   - body: [Complete review content]
+   - event: "COMMENT" or "REQUEST_CHANGES" or "APPROVE" based on findings
+
+### Output Format Required:
+```json
+{
+  "status": "success|error",
+  "review_posted": true|false,
+  "review_id": "review_id_if_successful",
+  "event_type": "COMMENT|REQUEST_CHANGES|APPROVE",
+  "files_analyzed": number,
+  "issues_found": number,
+  "summary": "Brief summary of what was done"
+}
+```
+
+**IMPORTANT**: Execute all steps automatically using ONLY GitHub MCP tools.
+**CRITICAL**: Do NOT add any footer, signature, or attribution like "Generated with Gemini" at the end of your review. The review should end with the Summary section only.
+
+---
+
+## 🚀 START AUTOMATED REVIEW NOW
+EOF
+}
+
 # Generate prompt file in temp location
 PROMPT_FILE="$(mktemp /tmp/codereview_prompt.XXXXXX.md)"
 print_status "progress" "Generating automated review prompt..."
-execute_automated_mcp_review > "$PROMPT_FILE"
+if [ "$SELECTED_TOOL" = "claude" ]; then
+    execute_automated_claude_review > "$PROMPT_FILE"
+else
+    execute_automated_gemini_review > "$PROMPT_FILE"
+fi
 print_status "success" "Automated prompt created: $PROMPT_FILE"
 
-# Execute with claude-cli using home directory config
-print_status "progress" "Executing claude-cli with existing MCP configuration..."
-
-# Set environment to use home directory config
-cd "$HOME"
-
-if claude "$(cat "$PROMPT_FILE")"; then
-    print_status "success" "Claude CLI executed successfully"
-    print_status "info" "Check your GitHub PR for the posted review: $URL"
-else
-    print_status "error" "Claude CLI execution failed"
-    rm -f "$PROMPT_FILE"
-    exit 1
+# Execute with selected CLI
+print_status "progress" "Executing $SELECTED_TOOL with MCP configuration..."
+if [ "$SELECTED_TOOL" = "claude" ]; then
+    cd "$HOME"
+    if claude "$(cat "$PROMPT_FILE")"; then
+        print_status "success" "Claude CLI executed successfully"
+        print_status "info" "Check your GitHub PR for the posted review: $URL"
+    else
+        print_status "error" "Claude CLI execution failed"
+        rm -f "$PROMPT_FILE"
+        exit 1
+    fi
+elif [ "$SELECTED_TOOL" = "gemini" ]; then
+    if gemini -p "$(cat "$PROMPT_FILE")"; then
+        print_status "success" "Gemini executed successfully"
+        print_status "info" "Check your GitHub PR for the posted review: $URL"
+    else
+        print_status "error" "Gemini execution failed"
+        rm -f "$PROMPT_FILE"
+        exit 1
+    fi
 fi
 
 # Cleanup
