@@ -1,12 +1,12 @@
-# 🤖 CodeReview MCP (Claude & Gemini)
+# 🤖 CodeReview MCP (Claude, Gemini & Codex)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub Issues](https://img.shields.io/github/issues/sychus/codereview-mcp-claude-code)](https://github.com/sychus/codereview-mcp-claude-code/issues)
 [![GitHub Stars](https://img.shields.io/github/stars/sychus/codereview-mcp-claude-code)](https://github.com/sychus/codereview-mcp-claude-code/stargazers)
 
-**Automated code review system powered by Claude AI, Gemini, and GitHub MCP (Model Context Protocol)**
+**Automated code review system powered by Claude AI, Gemini, Codex, and GitHub MCP (Model Context Protocol)**
 
-Transform your code review process with intelligent automation that analyzes GitHub Pull Requests and provides comprehensive feedback directly through GitHub's interface. Now supports both Claude and Gemini CLIs in a single unified script.
+Transform your code review process with intelligent automation that analyzes GitHub Pull Requests and provides comprehensive feedback directly through GitHub's interface. Now supports Claude, Gemini, and Codex CLIs in a single unified script.
 
 ## 👨‍💻 Author
 
@@ -16,14 +16,14 @@ Transform your code review process with intelligent automation that analyzes Git
 
 ## ✨ Features
 
-- 🔍 **Automated PR Analysis** - Intelligent analysis of GitHub Pull Requests using Claude AI or Gemini
+- 🔍 **Automated PR Analysis** - Intelligent analysis of GitHub Pull Requests using Claude AI, Gemini, or Codex
 - 📈 **Comprehensive Reviews** - Detailed feedback on code quality, security, performance, and best practices
 - 🚀 **Direct GitHub Integration** - Posts reviews directly to GitHub PRs via MCP tools
 - 🎯 **Customizable Guidelines** - Configurable review criteria and focus areas
 - 🛡️ **Security-First** - Built-in security vulnerability detection
 - ⚡ **CLI Automation** - One-command execution for streamlined workflows
 - 🎨 **Rich Output** - Colored terminal output with progress indicators
-- 🔄 **Multi-CLI Support** - Auto-detects Claude and Gemini CLIs, lets you choose if both are installed
+- 🔄 **Multi-CLI Support** - Auto-detects Claude, Gemini, and Codex CLIs, lets you choose if multiple are installed
 
 ## 🚀 Quick Start
 
@@ -32,13 +32,14 @@ Transform your code review process with intelligent automation that analyzes Git
 - **Node.js** (v18 or higher)
 - **Claude CODE** - Install with: `npm install -g @anthropic-ai/claude-code`
 - **Gemini CLI** (optional, for Google Gemini support)
+- **Codex CLI** (optional, for OpenAI Codex support)
 - **Docker** - Required for running MCP servers
 - **GitHub Personal Access Token** - For API access
-- **GitHub MCP Server** configured with Claude or Gemini (see setup below)
+- **GitHub MCP Server** configured with Claude, Gemini, or Codex (see setup below)
 
 ### MCP Configuration
 
-Before using this tool, you need to configure the GitHub MCP server with Claude Code or Gemini. For detailed instructions, visit the [Claude Code project](https://github.com/anthropics/claude-code) or your Gemini CLI documentation.
+Before using this tool, you need to configure the GitHub MCP server with Claude Code, Gemini, or Codex. For detailed instructions, visit the [Claude Code project](https://github.com/anthropics/claude-code), your Gemini CLI documentation, or Codex CLI documentation.
 
 #### 1. **Setup GitHub MCP Server**
 
@@ -50,7 +51,8 @@ Then configure the GitHub MCP server:
 ```bash
 claude mcp add github -s user -e GITHUB_PERSONAL_ACCESS_TOKEN=$MY_GITHUB_ACCESS_TOKEN... -- docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server
 ```
-Or for Gemini, follow the Gemini CLI instructions for MCP setup.
+For Gemini, follow the Gemini CLI instructions for MCP setup.
+For Codex, configure MCP in your `~/.codex/config.toml` file.
 
 Replace `$MY_GITHUB_ACCESS_TOKEN...` with your actual GitHub Personal Access Token.
 
@@ -60,9 +62,13 @@ Check that the GitHub MCP is properly configured:
 ```bash
 claude mcp list
 ```
-Or for Gemini:
+For Gemini:
 ```bash
 gemini mcp list
+```
+For Codex:
+```bash
+codex mcp list
 ```
 You should see `github` in the list of configured MCP servers.
 
@@ -87,9 +93,9 @@ You should see `github` in the list of configured MCP servers.
 ```
 
 The script will:
-1. ✅ Validate prerequisites (Claude CLI and/or Gemini CLI)
+1. ✅ Validate prerequisites (Claude CLI, Gemini CLI, and/or Codex CLI)
 2. 🔄 Auto-detect which CLI(s) are installed
-3. ❓ Prompt you to select if both are present, or auto-select if only one is available
+3. ❓ Prompt you to select if multiple are present, or auto-select if only one is available
 4. 🔄 Generate automated review prompt with MCP instructions
 5. 🤖 Execute the selected CLI with GitHub MCP tools
 6. 📝 Post comprehensive review directly to the GitHub PR
@@ -97,7 +103,8 @@ The script will:
 #### Supported CLIs
 - If only Claude CLI is installed, it will use Claude.
 - If only Gemini CLI is installed, it will use Gemini.
-- If both are installed, you will be prompted to choose.
+- If only Codex CLI is installed, it will use Codex.
+- If multiple CLIs are installed, you will be prompted to choose.
 
 ## 📋 How It Works
 
@@ -107,7 +114,7 @@ The script will:
 graph TD
     A[GitHub PR URL] --> B[Parse Repository Info]
     B --> C[Generate Review Prompt]
-    C --> D[Execute Claude or Gemini CLI with MCP]
+    C --> D[Execute Claude, Gemini, or Codex CLI with MCP]
     D --> E[GitHub MCP Tools]
     E --> F[Post Review to GitHub]
 ```
@@ -123,7 +130,7 @@ The system uses GitHub MCP tools exclusively:
 ### 3. **Review Process**
 
 1. **Data Gathering**: Fetches PR metadata, changed files, and file contents
-2. **Intelligent Analysis**: Claude or Gemini analyzes code using configurable guidelines
+2. **Intelligent Analysis**: Claude, Gemini, or Codex analyzes code using configurable guidelines
 3. **Review Generation**: Creates structured feedback following best practices
 4. **Direct Posting**: Publishes review directly to GitHub with appropriate status
 
@@ -149,6 +156,8 @@ Customize the review criteria by editing `review.md`:
 export CLAUDE_CONFIG_DIR="/path/to/your/claude/config"
 # Optional: Set Gemini config directory
 export GEMINI_CONFIG_DIR="$HOME/.gemini"
+# Optional: Set Codex config directory
+export CODEX_CONFIG_DIR="$HOME/.codex"
 ```
 
 ## 📚 Examples
@@ -163,7 +172,7 @@ export GEMINI_CONFIG_DIR="$HOME/.gemini"
 ℹ️  Analyzing URL: https://github.com/myorg/myapp/pull/42
 ✅ Detected Pull Request: myorg/myapp PR #42
 🔄 Checking prerequisites...
-✅ Prerequisites check passed (Claude or Gemini CLI ready)
+✅ Prerequisites check passed (Claude, Gemini, or Codex CLI ready)
 🔄 Generating automated review prompt...
 ✅ Automated prompt created: .codereview_prompt.md
 🔄 Executing selected CLI with MCP GitHub...
@@ -202,7 +211,7 @@ done
 
 ```
 codereview-mcp-claude-code/
-├── codereview.sh           # Main automation script (Claude & Gemini)
+├── codereview.sh           # Main automation script (Claude, Gemini & Codex)
 ├── review.md               # Default review guidelines
 ├── .gitignore              # Git ignore patterns
 └── README.md               # This file
@@ -230,14 +239,15 @@ bash -n codereview.sh
 
 ### Common Issues
 
-1. **Claude CLI or Gemini CLI not found**
+1. **Claude CLI, Gemini CLI, or Codex CLI not found**
    ```bash
    npm install -g claude-cli
    # or follow Gemini CLI installation instructions
+   # or follow Codex CLI installation instructions
    ```
 
 2. **GitHub MCP not configured**
-   - Verify with: `claude mcp list` or `gemini mcp list`
+   - Verify with: `claude mcp list`, `gemini mcp list`, or `codex mcp list`
    - If missing, follow the MCP Configuration section above
    - Ensure your GitHub token has correct permissions (`repo`, `pull_requests`, `issues`)
 
@@ -260,14 +270,18 @@ bash -n codereview.sh
    claude mcp test github
    # or
    gemini mcp test github
+   # or
+   codex mcp test github
    
    # Restart MCP server if needed
    claude mcp restart github
    # or
    gemini mcp restart github
+   # or
+   codex mcp restart github
    ```
 
-For more detailed MCP troubleshooting, refer to the [Claude Code documentation](https://github.com/anthropics/claude-code) or Gemini CLI docs.
+For more detailed MCP troubleshooting, refer to the [Claude Code documentation](https://github.com/anthropics/claude-code), Gemini CLI docs, or Codex CLI documentation.
 
 ## 📋 Requirements
 
@@ -275,6 +289,7 @@ For more detailed MCP troubleshooting, refer to the [Claude Code documentation](
 |-------------|---------|--------------------------------|
 | Claude CLI  | Latest  | AI-powered code analysis       |
 | Gemini CLI  | Latest  | AI-powered code analysis       |
+| Codex CLI   | Latest  | AI-powered code analysis       |
 | Docker      | Latest  | MCP server containerization    |
 | Bash        | 4.0+    | Script execution               |
 | GitHub MCP  | Latest  | GitHub API integration         |
@@ -299,6 +314,7 @@ This project is licensed under the GNU GENERAL PUBLIC LICENSE V2 - see the [LICE
 
 - **Claude AI** by Anthropic for powerful code analysis capabilities
 - **Gemini** by Google for advanced code review support
+- **Codex** by OpenAI for intelligent code understanding
 - **Model Context Protocol (MCP)** for seamless tool integration
 - **GitHub** for comprehensive API and PR management
 - **Open Source Community** for inspiration and best practices
