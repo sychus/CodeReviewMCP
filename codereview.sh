@@ -24,14 +24,17 @@ print_status() {
 }
 
 # Argument check
-if [ "$#" -ne 2 ]; then
-    echo "Usage: $(basename $0) review.md <URL>"
-    echo "Example: $(basename $0) review.md https://github.com/user/repo/pull/123"
+if [ "$#" -lt 2 ]; then
+    echo "Usage: $(basename $0) review.md <URL1> [URL2] [URL3] ..."
+    echo "Examples:"
+    echo "  Single PR: $(basename $0) review.md https://github.com/user/repo/pull/123"
+    echo "  Multiple PRs: $(basename $0) review.md https://github.com/user/repo1/pull/123 https://github.com/user/repo2/pull/456"
     exit 1
 fi
 
 CONTEXT_FILE="$1"
-URL="$2"
+shift # Remove first argument (context file), remaining are URLs
+URLS=("$@") # Array of all remaining URLs
 
 # Handle relative vs absolute paths for context file
 if [[ "$CONTEXT_FILE" != /* ]]; then
@@ -129,24 +132,22 @@ elif [ "$SELECTED_TOOL" = "codex" ]; then
     fi
 fi
 
-# Extract repo info
-print_status "info" "Analyzing URL: $URL"
-if [[ $URL =~ github\.com/([^/]+)/([^/]+)/pull/([0-9]+) ]]; then
-    OWNER="${BASH_REMATCH[1]}"
-    REPO="${BASH_REMATCH[2]}"
-    PR_NUMBER="${BASH_REMATCH[3]}"
-    print_status "success" "Detected Pull Request: $OWNER/$REPO PR #$PR_NUMBER"
-else
-    print_status "error" "Invalid GitHub PR URL format"
-    exit 1
-fi
+# Validate URLs format before processing
+print_status "info" "Validating ${#URLS[@]} URL(s)..."
+for url in "${URLS[@]}"; do
+    if [[ ! $url =~ github\.com/([^/]+)/([^/]+)/pull/([0-9]+) ]]; then
+        print_status "error" "Invalid GitHub PR URL format: $url"
+        exit 1
+    fi
+done
 
+print_status "success" "All URLs validated successfully"
 print_status "success" "Prerequisites check passed"
 
 # Prompt generation functions
 execute_automated_claude_review() {
     local context_content
-    context_content=$(cat "$CONTEXT_FILE" | sed "s|{URL_PARAMETER}|$URL|g")
+    context_content=$(cat "$CONTEXT_FILE" | sed "s|{URL_PARAMETER}|{URL_PARAMETER}|g")
     cat << EOF
 ## 🚨 CRITICAL TOOL RESTRICTIONS
 **MANDATORY**: You MUST ONLY use GitHub MCP server tools. DO NOT use any bash commands, CLI tools, or external commands.
@@ -169,37 +170,29 @@ $context_content
 
 ## 🤖 AUTOMATED EXECUTION MODE
 
-### GitHub Information
-- **URL**: $URL
-- **Owner**: $OWNER  
-- **Repository**: $REPO
-- **Pull Request**: #$PR_NUMBER
-
 ### Required Actions (Execute in sequence):
 
-1. **Get PR Details**: Use GitHub MCP tool `github:get_pull_request` with owner: "$OWNER", repo: "$REPO", pull_number: $PR_NUMBER
-2. **Get PR Files**: Use GitHub MCP tool `github:get_pull_request_files` with owner: "$OWNER", repo: "$REPO", pull_number: $PR_NUMBER  
-3. **Analyze Key Files**: Use GitHub MCP tool `github:get_file_contents` for the most important changed files (max 3-5 files)
-4. **Generate Review**: Create comprehensive code review following the specified format (DO NOT include any footer or signature such as "Generated with Claude Code")
-5. **Post Review**: Use GitHub MCP tool `github:create_pull_request_review` with:
-   - owner: "$OWNER"
-   - repo: "$REPO" 
-   - pull_number: $PR_NUMBER
+1. **Parse URL**: Extract owner, repo, and pull request number from the provided GitHub PR URL
+2. **Get PR Details**: Use GitHub MCP tool \`github:get_pull_request\` with the extracted owner, repo, and pull_number
+3. **Get PR Files**: Use GitHub MCP tool \`github:get_pull_request_files\` with the extracted owner, repo, and pull_number  
+4. **Analyze Key Files**: Use GitHub MCP tool \`github:get_file_contents\` for the most important changed files (max 3-5 files)
+5. **Generate Review**: Create comprehensive code review following the specified format (DO NOT include any footer or signature such as "Generated with Claude Code")
+6. **Post Review**: Use GitHub MCP tool \`github:create_pull_request_review\` with the extracted owner, repo, and pull_number
    - body: [Complete review content]
    - event: "COMMENT" or "REQUEST_CHANGES" or "APPROVE" based on findings
 
 ### Output Format Required:
-```json
+\`\`\`json
 {
-  "status": "success|error",
-  "review_posted": true|false,
-  "review_id": "review_id_if_successful",
-  "event_type": "COMMENT|REQUEST_CHANGES|APPROVE",
-  "files_analyzed": number,
-  "issues_found": number,
-  "summary": "Brief summary of what was done"
+  \"status\": \"success|error\",
+  \"review_posted\": true|false,
+  \"review_id\": \"review_id_if_successful\",
+  \"event_type\": \"COMMENT|REQUEST_CHANGES|APPROVE\",
+  \"files_analyzed\": number,
+  \"issues_found\": number,
+  \"summary\": \"Brief summary of what was done\"
 }
-```
+\`\`\`
 
 **IMPORTANT**: Execute all steps automatically using ONLY GitHub MCP tools.
 **CRITICAL**: Do NOT add any footer, signature, or attribution like "Generated with Claude Code" at the end of your review. The review should end with the Summary section only.
@@ -212,7 +205,7 @@ EOF
 
 execute_automated_gemini_review() {
     local context_content
-    context_content=$(cat "$CONTEXT_FILE" | sed "s|{URL_PARAMETER}|$URL|g")
+    context_content=$(cat "$CONTEXT_FILE" | sed "s|{URL_PARAMETER}|{URL_PARAMETER}|g")
     cat << EOF
 ## 🚨 CRITICAL TOOL RESTRICTIONS
 **MANDATORY**: You MUST ONLY use GitHub MCP server tools. DO NOT use any bash commands, CLI tools, or external commands.
@@ -235,37 +228,29 @@ $context_content
 
 ## 🤖 AUTOMATED EXECUTION MODE
 
-### GitHub Information
-- **URL**: $URL
-- **Owner**: $OWNER  
-- **Repository**: $REPO
-- **Pull Request**: #$PR_NUMBER
-
 ### Required Actions (Execute in sequence):
 
-1. **Get PR Details**: Use available GitHub MCP tool (try `github:get_pull_request` first, if not available use `mcp_github_get_pull_request`) with owner: "$OWNER", repo: "$REPO", pull_number: $PR_NUMBER
-2. **Get PR Files**: Use available GitHub MCP tool (try `github:get_pull_request_files` first, if not available use `mcp_github_get_pull_request_files`) with owner: "$OWNER", repo: "$REPO", pull_number: $PR_NUMBER  
-3. **Analyze Key Files**: Use available GitHub MCP tool (try `github:get_file_contents` first, if not available use `mcp_github_get_file_contents`) for the most important changed files (max 3-5 files)
-4. **Generate Review**: Create comprehensive code review following the specified format (DO NOT include any footer or signature such as "Generated with Gemini")
-5. **Post Review**: Use available GitHub MCP tool (try `github:create_pull_request_review` first, if not available use `mcp_github_create_pull_request_review`) with:
-   - owner: "$OWNER"
-   - repo: "$REPO" 
-   - pull_number: $PR_NUMBER
+1. **Parse URL**: Extract owner, repo, and pull request number from the provided GitHub PR URL
+2. **Get PR Details**: Use available GitHub MCP tool (try \`github:get_pull_request\` first, if not available use \`mcp_github_get_pull_request\`) with the extracted owner, repo, and pull_number
+3. **Get PR Files**: Use available GitHub MCP tool (try \`github:get_pull_request_files\` first, if not available use \`mcp_github_get_pull_request_files\`) with the extracted owner, repo, and pull_number  
+4. **Analyze Key Files**: Use available GitHub MCP tool (try \`github:get_file_contents\` first, if not available use \`mcp_github_get_file_contents\`) for the most important changed files (max 3-5 files)
+5. **Generate Review**: Create comprehensive code review following the specified format (DO NOT include any footer or signature such as "Generated with Gemini")
+6. **Post Review**: Use available GitHub MCP tool (try \`github:create_pull_request_review\` first, if not available use \`mcp_github_create_pull_request_review\`) with the extracted owner, repo, and pull_number
    - body: [Complete review content]
    - event: "COMMENT" or "REQUEST_CHANGES" or "APPROVE" based on findings
 
 ### Output Format Required:
-```json
+\`\`\`json
 {
-  "status": "success|error",
-  "review_posted": true|false,
-  "review_id": "review_id_if_successful",
-  "event_type": "COMMENT|REQUEST_CHANGES|APPROVE",
-  "files_analyzed": number,
-  "issues_found": number,
-  "summary": "Brief summary of what was done"
+  \"status\": \"success|error\",
+  \"review_posted\": true|false,
+  \"review_id\": \"review_id_if_successful\",
+  \"event_type\": \"COMMENT|REQUEST_CHANGES|APPROVE\",
+  \"files_analyzed\": number,
+  \"issues_found\": number,
+  \"summary\": \"Brief summary of what was done\"
 }
-```
+\`\`\`
 
 **IMPORTANT**: Execute all steps automatically using ONLY GitHub MCP tools.
 **CRITICAL**: Do NOT add any footer, signature, or attribution like "Generated with Gemini" at the end of your review. The review should end with the Summary section only.
@@ -278,7 +263,7 @@ EOF
 
 execute_automated_codex_review() {
     local context_content
-    context_content=$(cat "$CONTEXT_FILE" | sed "s|{URL_PARAMETER}|$URL|g")
+    context_content=$(cat "$CONTEXT_FILE" | sed "s|{URL_PARAMETER}|{URL_PARAMETER}|g")
     cat << EOF
 ## 🚨 CRITICAL TOOL RESTRICTIONS
 **MANDATORY**: You MUST ONLY use GitHub MCP server tools. DO NOT use any bash commands, CLI tools, or external commands.
@@ -302,36 +287,36 @@ $context_content
 ## 🤖 AUTOMATED EXECUTION MODE
 
 ### GitHub Information
-- **URL**: $URL
-- **Owner**: $OWNER  
-- **Repository**: $REPO
-- **Pull Request**: #$PR_NUMBER
+- **URL**: $url
+- **Owner**: $owner  
+- **Repository**: $repo
+- **Pull Request**: #$pr_number
 
 ### Required Actions (Execute in sequence):
 
-1. **Get PR Details**: Use available GitHub MCP tool (try `github:get_pull_request` first, if not available use `mcp_github_get_pull_request`) with owner: "$OWNER", repo: "$REPO", pull_number: $PR_NUMBER
-2. **Get PR Files**: Use available GitHub MCP tool (try `github:get_pull_request_files` first, if not available use `mcp_github_get_pull_request_files`) with owner: "$OWNER", repo: "$REPO", pull_number: $PR_NUMBER  
-3. **Analyze Key Files**: Use available GitHub MCP tool (try `github:get_file_contents` first, if not available use `mcp_github_get_file_contents`) for the most important changed files (max 3-5 files)
+1. **Get PR Details**: Use available GitHub MCP tool (try \`github:get_pull_request\` first, if not available use \`mcp_github_get_pull_request\`) with owner: "$owner", repo: "$repo", pull_number: $pr_number
+2. **Get PR Files**: Use available GitHub MCP tool (try \`github:get_pull_request_files\` first, if not available use \`mcp_github_get_pull_request_files\`) with owner: "$owner", repo: "$repo", pull_number: $pr_number  
+3. **Analyze Key Files**: Use available GitHub MCP tool (try \`github:get_file_contents\` first, if not available use \`mcp_github_get_file_contents\`) for the most important changed files (max 3-5 files)
 4. **Generate Review**: Create comprehensive code review following the specified format (DO NOT include any footer or signature such as "Generated with Codex")
-5. **Post Review**: Use available GitHub MCP tool (try `github:create_pull_request_review` first, if not available use `mcp_github_create_pull_request_review`) with:
-   - owner: "$OWNER"
-   - repo: "$REPO" 
-   - pull_number: $PR_NUMBER
+5. **Post Review**: Use available GitHub MCP tool (try \`github:create_pull_request_review\` first, if not available use \`mcp_github_create_pull_request_review\`) with:
+   - owner: "$owner"
+   - repo: "$repo" 
+   - pull_number: $pr_number
    - body: [Complete review content]
    - event: "COMMENT" or "REQUEST_CHANGES" or "APPROVE" based on findings
 
 ### Output Format Required:
-```json
+\`\`\`json
 {
-  "status": "success|error",
-  "review_posted": true|false,
-  "review_id": "review_id_if_successful",
-  "event_type": "COMMENT|REQUEST_CHANGES|APPROVE",
-  "files_analyzed": number,
-  "issues_found": number,
-  "summary": "Brief summary of what was done"
+  \"status\": \"success|error\",
+  \"review_posted\": true|false,
+  \"review_id\": \"review_id_if_successful\",
+  \"event_type\": \"COMMENT|REQUEST_CHANGES|APPROVE\",
+  \"files_analyzed\": number,
+  \"issues_found\": number,
+  \"summary\": \"Brief summary of what was done\"
 }
-```
+\`\`\`
 
 **IMPORTANT**: Execute all steps automatically using ONLY GitHub MCP tools.
 **CRITICAL**: Do NOT add any footer, signature, or attribution like "Generated with Codex" at the end of your review. The review should end with the Summary section only.
@@ -342,9 +327,16 @@ $context_content
 EOF
 }
 
-# Generate prompt file in temp location
+# Initialize counters for summary report
+TOTAL_PRS=${#URLS[@]}
+SUCCESSFUL_REVIEWS=0
+FAILED_REVIEWS=0
+REVIEW_RESULTS=()
+
+# Generate single reusable prompt file
 PROMPT_FILE="$(mktemp /tmp/codereview_prompt.XXXXXX.md)"
-print_status "progress" "Generating automated review prompt..."
+print_status "progress" "Generating reusable review prompt template..."
+
 if [ "$SELECTED_TOOL" = "claude" ]; then
     execute_automated_claude_review > "$PROMPT_FILE"
 elif [ "$SELECTED_TOOL" = "gemini" ]; then
@@ -352,40 +344,116 @@ elif [ "$SELECTED_TOOL" = "gemini" ]; then
 elif [ "$SELECTED_TOOL" = "codex" ]; then
     execute_automated_codex_review > "$PROMPT_FILE"
 fi
-print_status "success" "Automated prompt created: $PROMPT_FILE"
 
-# Execute with selected CLI
-print_status "progress" "Executing $SELECTED_TOOL with MCP configuration..."
-if [ "$SELECTED_TOOL" = "claude" ]; then
-    cd "$HOME"
-    if claude "$(cat "$PROMPT_FILE")"; then
-        print_status "success" "Claude CLI executed successfully"
-        print_status "info" "Check your GitHub PR for the posted review: $URL"
-    else
-        print_status "error" "Claude CLI execution failed"
-        rm -f "$PROMPT_FILE"
-        exit 1
-    fi
-elif [ "$SELECTED_TOOL" = "gemini" ]; then
-    if gemini -p "$(cat "$PROMPT_FILE")"; then
-        print_status "success" "Gemini executed successfully"
-        print_status "info" "Check your GitHub PR for the posted review: $URL"
-    else
-        print_status "error" "Gemini execution failed"
-        rm -f "$PROMPT_FILE"
-        exit 1
-    fi
-elif [ "$SELECTED_TOOL" = "codex" ]; then
-    if codex "$(cat "$PROMPT_FILE")"; then
-        print_status "success" "Codex executed successfully"
-        print_status "info" "Check your GitHub PR for the posted review: $URL"
-    else
-        print_status "error" "Codex execution failed"
-        rm -f "$PROMPT_FILE"
-        exit 1
-    fi
+# Verify prompt file was created successfully
+if [ -z "$PROMPT_FILE" ] || [ ! -f "$PROMPT_FILE" ]; then
+    print_status "error" "Failed to create prompt template file"
+    exit 1
 fi
 
-# Cleanup
+print_status "success" "Prompt template created successfully"
+print_status "info" "Starting batch review process for $TOTAL_PRS Pull Request(s) using $SELECTED_TOOL"
+
+# Process each URL
+for i in "${!URLS[@]}"; do
+    URL="${URLS[$i]}"
+    CURRENT_PR=$((i + 1))
+    
+    print_status "progress" "[$CURRENT_PR/$TOTAL_PRS] Processing PR: $URL"
+    
+    # Extract repo info for current URL
+    if [[ $URL =~ github\.com/([^/]+)/([^/]+)/pull/([0-9]+) ]]; then
+        OWNER="${BASH_REMATCH[1]}"
+        REPO="${BASH_REMATCH[2]}"
+        PR_NUMBER="${BASH_REMATCH[3]}"
+        print_status "info" "[$CURRENT_PR/$TOTAL_PRS] Analyzing: $OWNER/$REPO PR #$PR_NUMBER"
+    else
+        print_status "error" "[$CURRENT_PR/$TOTAL_PRS] Invalid URL format: $URL"
+        FAILED_REVIEWS=$((FAILED_REVIEWS + 1))
+        REVIEW_RESULTS+=("❌ $URL - Invalid URL format")
+        continue
+    fi
+    
+    # Use the shared prompt file with current PR URL as parameter
+    
+    # Execute with selected CLI
+    print_status "progress" "[$CURRENT_PR/$TOTAL_PRS] Executing $SELECTED_TOOL for PR #$PR_NUMBER..."
+    
+    SUCCESS=false
+    if [ "$SELECTED_TOOL" = "claude" ]; then
+        cd "$HOME"
+        if claude "$(cat "$PROMPT_FILE")
+
+## 🎯 CURRENT PULL REQUEST TO REVIEW:
+**URL**: $URL
+
+Please analyze this specific Pull Request URL." >/dev/null 2>&1; then
+            SUCCESS=true
+        fi
+    elif [ "$SELECTED_TOOL" = "gemini" ]; then
+        if gemini -p "$(cat "$PROMPT_FILE")
+
+## 🎯 CURRENT PULL REQUEST TO REVIEW:
+**URL**: $URL
+
+Please analyze this specific Pull Request URL." >/dev/null 2>&1; then
+            SUCCESS=true
+        fi
+    elif [ "$SELECTED_TOOL" = "codex" ]; then
+        if codex "$(cat "$PROMPT_FILE")
+
+## 🎯 CURRENT PULL REQUEST TO REVIEW:
+**URL**: $URL
+
+Please analyze this specific Pull Request URL." >/dev/null 2>&1; then
+            SUCCESS=true
+        fi
+    fi
+    
+    # Record result
+    if [ "$SUCCESS" = true ]; then
+        print_status "success" "[$CURRENT_PR/$TOTAL_PRS] ✅ Review completed for PR #$PR_NUMBER"
+        SUCCESSFUL_REVIEWS=$((SUCCESSFUL_REVIEWS + 1))
+        REVIEW_RESULTS+=("✅ $URL - Review posted successfully")
+    else
+        print_status "error" "[$CURRENT_PR/$TOTAL_PRS] ❌ Review failed for PR #$PR_NUMBER"
+        FAILED_REVIEWS=$((FAILED_REVIEWS + 1))
+        REVIEW_RESULTS+=("❌ $URL - CLI execution failed")
+    fi
+    
+    # No cleanup needed - using shared prompt file
+    
+    # Add a small delay between reviews to avoid overwhelming the API
+    if [ $CURRENT_PR -lt $TOTAL_PRS ]; then
+        sleep 2
+    fi
+done
+
+# Final summary report
+echo
+print_status "info" "📊 BATCH REVIEW SUMMARY REPORT"
+echo "═══════════════════════════════════════"
+echo "📈 Total PRs processed: $TOTAL_PRS"
+echo "✅ Successful reviews: $SUCCESSFUL_REVIEWS"
+echo "❌ Failed reviews: $FAILED_REVIEWS"
+echo "🔧 Tool used: $SELECTED_TOOL"
+echo
+echo "📋 Detailed Results:"
+for result in "${REVIEW_RESULTS[@]}"; do
+    echo "  $result"
+done
+echo
+if [ $SUCCESSFUL_REVIEWS -gt 0 ]; then
+    print_status "info" "🔗 Check your GitHub PRs for the posted reviews"
+fi
+
+# Cleanup shared prompt file
 rm -f "$PROMPT_FILE"
-print_status "success" "Review completed successfully"
+
+if [ $FAILED_REVIEWS -eq 0 ]; then
+    print_status "success" "🎉 All reviews completed successfully!"
+    exit 0
+else
+    print_status "warning" "⚠️ Some reviews failed. Check the summary above for details."
+    exit 1
+fi

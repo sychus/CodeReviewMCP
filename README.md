@@ -6,7 +6,7 @@
 
 **Automated code review system powered by Claude AI, Gemini, Codex, and GitHub MCP (Model Context Protocol)**
 
-Transform your code review process with intelligent automation that analyzes GitHub Pull Requests and provides comprehensive feedback directly through GitHub's interface. Now supports Claude, Gemini, and Codex CLIs in a single unified script.
+Transform your code review process with intelligent automation that analyzes single or multiple GitHub Pull Requests and provides comprehensive feedback directly through GitHub's interface. Now supports Claude, Gemini, and Codex CLIs in a single unified script with batch processing capabilities.
 
 ## 👨‍💻 Author
 
@@ -16,14 +16,17 @@ Transform your code review process with intelligent automation that analyzes Git
 
 ## ✨ Features
 
-- 🔍 **Automated PR Analysis** - Intelligent analysis of GitHub Pull Requests using Claude AI, Gemini, or Codex
+- 🔍 **Automated PR Analysis** - Intelligent analysis of single or multiple GitHub Pull Requests using Claude AI, Gemini, or Codex
+- 📊 **Batch Processing** - Process multiple PRs in a single execution with progress tracking and comprehensive summary reports
 - 📈 **Comprehensive Reviews** - Detailed feedback on code quality, security, performance, and best practices
 - 🚀 **Direct GitHub Integration** - Posts reviews directly to GitHub PRs via MCP tools
 - 🎯 **Customizable Guidelines** - Configurable review criteria and focus areas
 - 🛡️ **Security-First** - Built-in security vulnerability detection
 - ⚡ **CLI Automation** - One-command execution for streamlined workflows
-- 🎨 **Rich Output** - Colored terminal output with progress indicators
+- 🎨 **Rich Output** - Colored terminal output with progress indicators and real-time status updates
 - 🔄 **Multi-CLI Support** - Auto-detects Claude, Gemini, and Codex CLIs, lets you choose if multiple are installed
+- 🔗 **URL Validation** - Validates all PR URLs before processing to ensure successful batch operations
+- 📋 **Smart Resource Management** - Uses a single reusable prompt template for efficiency across multiple PRs
 
 ## 🚀 Quick Start
 
@@ -88,17 +91,24 @@ You should see `github` in the list of configured MCP servers.
 ### Basic Usage
 
 ```bash
-# Review a GitHub Pull Request
+# Single Pull Request Review
 ./codereview.sh review.md https://github.com/owner/repo/pull/123
+
+# Multiple Pull Requests Review (NEW!)
+./codereview.sh review.md \
+  https://github.com/owner1/repo1/pull/123 \
+  https://github.com/owner2/repo2/pull/456 \
+  https://github.com/owner3/repo3/pull/789
 ```
 
 The script will:
-1. ✅ Validate prerequisites (Claude CLI, Gemini CLI, and/or Codex CLI)
-2. 🔄 Auto-detect which CLI(s) are installed
+1. ✅ Validate prerequisites and all PR URLs
+2. 🔄 Auto-detect which CLI(s) are installed  
 3. ❓ Prompt you to select if multiple are present, or auto-select if only one is available
-4. 🔄 Generate automated review prompt with MCP instructions
-5. 🤖 Execute the selected CLI with GitHub MCP tools
-6. 📝 Post comprehensive review directly to the GitHub PR
+4. 🔄 Generate a reusable review prompt template
+5. 🤖 Process each PR sequentially with progress tracking
+6. 📝 Post comprehensive review directly to each GitHub PR
+7. 📊 Display final summary report with results
 
 #### Supported CLIs
 - If only Claude CLI is installed, it will use Claude.
@@ -112,11 +122,16 @@ The script will:
 
 ```mermaid
 graph TD
-    A[GitHub PR URL] --> B[Parse Repository Info]
-    B --> C[Generate Review Prompt]
-    C --> D[Execute Claude, Gemini, or Codex CLI with MCP]
-    D --> E[GitHub MCP Tools]
-    E --> F[Post Review to GitHub]
+    A[GitHub PR URLs] --> B[Validate All URLs]
+    B --> C[Generate Reusable Review Prompt]
+    C --> D{Process Each PR}
+    D --> E[Parse Repository Info]
+    E --> F[Execute Claude/Gemini/Codex CLI with MCP]
+    F --> G[GitHub MCP Tools]
+    G --> H[Post Review to GitHub]
+    H --> I{More PRs?}
+    I -->|Yes| D
+    I -->|No| J[Generate Summary Report]
 ```
 
 ### 2. **MCP Tool Integration**
@@ -129,10 +144,14 @@ The system uses GitHub MCP tools exclusively:
 
 ### 3. **Review Process**
 
-1. **Data Gathering**: Fetches PR metadata, changed files, and file contents
-2. **Intelligent Analysis**: Claude, Gemini, or Codex analyzes code using configurable guidelines
-3. **Review Generation**: Creates structured feedback following best practices
-4. **Direct Posting**: Publishes review directly to GitHub with appropriate status
+1. **URL Validation**: Validates all provided GitHub PR URLs before processing
+2. **Template Generation**: Creates a single reusable prompt template for efficiency
+3. **Batch Processing**: Processes each PR sequentially with progress tracking
+4. **Data Gathering**: For each PR, fetches metadata, changed files, and file contents
+5. **Intelligent Analysis**: Claude, Gemini, or Codex analyzes code using configurable guidelines
+6. **Review Generation**: Creates structured feedback following best practices
+7. **Direct Posting**: Publishes review directly to GitHub with appropriate status
+8. **Summary Reporting**: Displays comprehensive results with success/failure statistics
 
 ## ⚙️ Configuration
 
@@ -162,22 +181,57 @@ export CODEX_CONFIG_DIR="$HOME/.codex"
 
 ## 📚 Examples
 
-### Basic PR Review
+### Single PR Review
 ```bash
 ./codereview.sh review.md https://github.com/myorg/myapp/pull/42
 ```
 
+### Multiple PRs Review  
+```bash
+./codereview.sh review.md \
+  https://github.com/myorg/myapp/pull/42 \
+  https://github.com/myorg/myapp/pull/43 \
+  https://github.com/myorg/myapp/pull/44
+```
+
 ### Sample Output
 ```
-ℹ️  Analyzing URL: https://github.com/myorg/myapp/pull/42
-✅ Detected Pull Request: myorg/myapp PR #42
-🔄 Checking prerequisites...
-✅ Prerequisites check passed (Claude, Gemini, or Codex CLI ready)
-🔄 Generating automated review prompt...
-✅ Automated prompt created: .codereview_prompt.md
-🔄 Executing selected CLI with MCP GitHub...
-✅ CLI executed successfully
-ℹ️  Check your GitHub PR for the posted review
+ℹ️  Validating 3 URL(s)...
+✅ All URLs validated successfully
+✅ Prerequisites check passed
+🔄 Generating reusable review prompt template...
+✅ Prompt template created successfully
+ℹ️  Starting batch review process for 3 Pull Request(s) using claude
+
+🔄 [1/3] Processing PR: https://github.com/myorg/myapp/pull/42
+ℹ️  [1/3] Analyzing: myorg/myapp PR #42
+🔄 [1/3] Executing claude for PR #42...
+✅ [1/3] ✅ Review completed for PR #42
+
+🔄 [2/3] Processing PR: https://github.com/myorg/myapp/pull/43
+ℹ️  [2/3] Analyzing: myorg/myapp PR #43
+🔄 [2/3] Executing claude for PR #43...
+✅ [2/3] ✅ Review completed for PR #43
+
+🔄 [3/3] Processing PR: https://github.com/myorg/myapp/pull/44
+ℹ️  [3/3] Analyzing: myorg/myapp PR #44
+🔄 [3/3] Executing claude for PR #44...
+✅ [3/3] ✅ Review completed for PR #44
+
+📊 BATCH REVIEW SUMMARY REPORT
+═══════════════════════════════════════
+📈 Total PRs processed: 3
+✅ Successful reviews: 3
+❌ Failed reviews: 0
+🔧 Tool used: claude
+
+📋 Detailed Results:
+  ✅ https://github.com/myorg/myapp/pull/42 - Review posted successfully
+  ✅ https://github.com/myorg/myapp/pull/43 - Review posted successfully  
+  ✅ https://github.com/myorg/myapp/pull/44 - Review posted successfully
+
+🔗 Check your GitHub PRs for the posted reviews
+🎉 All reviews completed successfully!
 ```
 
 ## 🛠️ Advanced Usage
@@ -187,22 +241,39 @@ export CODEX_CONFIG_DIR="$HOME/.codex"
 Create specialized review templates for different project types:
 
 ```bash
-# Frontend-focused review
+# Frontend-focused review (single PR)
 ./codereview.sh templates/frontend-review.md https://github.com/org/ui-repo/pull/15
 
-# Backend API review  
-./codereview.sh templates/api-review.md https://github.com/org/api-repo/pull/28
+# Backend API review (multiple PRs)
+./codereview.sh templates/api-review.md \
+  https://github.com/org/api-repo/pull/28 \
+  https://github.com/org/api-repo/pull/29 \
+  https://github.com/org/api-repo/pull/30
 ```
 
-### Batch Processing
-
-Process multiple PRs:
+### Real-World Use Cases
 
 ```bash
-# Create a simple batch script
-for pr in 123 124 125; do
-  ./codereview.sh review.md https://github.com/myorg/myapp/pull/$pr
-done
+# Daily review routine - multiple PRs from your team
+./codereview.sh review.md \
+  https://github.com/myorg/backend/pull/156 \
+  https://github.com/myorg/frontend/pull/87 \
+  https://github.com/myorg/mobile/pull/23
+
+# Release preparation - review all feature PRs
+./codereview.sh review.md \
+  https://github.com/myorg/project/pull/201 \
+  https://github.com/myorg/project/pull/202 \
+  https://github.com/myorg/project/pull/203 \
+  https://github.com/myorg/project/pull/204 \
+  https://github.com/myorg/project/pull/205
+
+# Code review backlog cleanup
+./codereview.sh review.md \
+  https://github.com/myorg/service/pull/45 \
+  https://github.com/myorg/service/pull/46 \
+  https://github.com/myorg/service/pull/47 \
+  https://github.com/myorg/service/pull/48
 ```
 
 ## 🛠️ Development
