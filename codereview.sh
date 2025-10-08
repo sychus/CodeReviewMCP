@@ -23,18 +23,45 @@ print_status() {
     esac
 }
 
+# Parse arguments including debug flag
+DEBUG_MODE=false
+CONTEXT_FILE=""
+URLS=()
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --debug)
+            DEBUG_MODE=true
+            shift
+            ;;
+        -*)
+            print_status "error" "Unknown option: $1"
+            exit 1
+            ;;
+        *)
+            if [ -z "$CONTEXT_FILE" ]; then
+                CONTEXT_FILE="$1"
+            else
+                URLS+=("$1")
+            fi
+            shift
+            ;;
+    esac
+done
+
 # Argument check
-if [ "$#" -lt 2 ]; then
-    echo "Usage: $(basename $0) review.md <URL1> [URL2] [URL3] ..."
+if [ -z "$CONTEXT_FILE" ] || [ ${#URLS[@]} -eq 0 ]; then
+    echo "Usage: $(basename $0) [--debug] review.md <URL1> [URL2] [URL3] ..."
     echo "Examples:"
     echo "  Single PR: $(basename $0) review.md https://github.com/user/repo/pull/123"
     echo "  Multiple PRs: $(basename $0) review.md https://github.com/user/repo1/pull/123 https://github.com/user/repo2/pull/456"
+    echo "  Debug mode: $(basename $0) --debug review.md https://github.com/user/repo/pull/123"
     exit 1
 fi
 
-CONTEXT_FILE="$1"
-shift # Remove first argument (context file), remaining are URLs
-URLS=("$@") # Array of all remaining URLs
+if [ "$DEBUG_MODE" = true ]; then
+    print_status "info" "🐛 Debug mode enabled"
+fi
 
 # Handle relative vs absolute paths for context file
 if [[ "$CONTEXT_FILE" != /* ]]; then
@@ -380,43 +407,118 @@ for i in "${!URLS[@]}"; do
     print_status "progress" "[$CURRENT_PR/$TOTAL_PRS] Executing $SELECTED_TOOL for PR #$PR_NUMBER..."
     
     SUCCESS=false
+    REVIEW_OUTPUT=""
     if [ "$SELECTED_TOOL" = "claude" ]; then
         cd "$HOME"
-        if claude "$(cat "$PROMPT_FILE")
+        if [ "$DEBUG_MODE" = true ]; then
+            print_status "info" "[$CURRENT_PR/$TOTAL_PRS] 🐛 Debug: Current directory: $(pwd)"
+            print_status "info" "[$CURRENT_PR/$TOTAL_PRS] 🐛 Debug: Claude config exists: $([ -f "$HOME/.claude.json" ] && echo "yes" || echo "no")"
+            print_status "info" "[$CURRENT_PR/$TOTAL_PRS] 🐛 Debug: Prompt file size: $(wc -c < "$PROMPT_FILE") bytes"
+        fi
+        print_status "info" "[$CURRENT_PR/$TOTAL_PRS] Executing Claude CLI..."
+        REVIEW_OUTPUT=$(claude "$(cat "$PROMPT_FILE")
 
 ## 🎯 CURRENT PULL REQUEST TO REVIEW:
 **URL**: $URL
 
-Please analyze this specific Pull Request URL." >/dev/null 2>&1; then
+Please analyze this specific Pull Request URL." 2>&1)
+        CLAUDE_EXIT_CODE=$?
+        if [ "$DEBUG_MODE" = true ]; then
+            print_status "info" "[$CURRENT_PR/$TOTAL_PRS] 🐛 Debug: Claude exit code: $CLAUDE_EXIT_CODE"
+            print_status "info" "[$CURRENT_PR/$TOTAL_PRS] 🐛 Debug: Output length: ${#REVIEW_OUTPUT} characters"
+        fi
+        echo "$REVIEW_OUTPUT"
+        if [ $CLAUDE_EXIT_CODE -eq 0 ]; then
             SUCCESS=true
+        else
+            print_status "error" "[$CURRENT_PR/$TOTAL_PRS] Claude CLI failed with exit code: $CLAUDE_EXIT_CODE"
+            # Check for common error patterns in output
+            if echo "$REVIEW_OUTPUT" | grep -qi "authentication\|unauthorized\|access denied\|token"; then
+                print_status "error" "[$CURRENT_PR/$TOTAL_PRS] 🔒 Authentication issue detected - check GitHub token/permissions"
+            elif echo "$REVIEW_OUTPUT" | grep -qi "not found\|404\|does not exist"; then
+                print_status "error" "[$CURRENT_PR/$TOTAL_PRS] 🔍 Resource not found - check if PR exists and is accessible"
+            elif echo "$REVIEW_OUTPUT" | grep -qi "rate limit\|too many requests"; then
+                print_status "error" "[$CURRENT_PR/$TOTAL_PRS] ⏰ Rate limit exceeded - wait before retrying"
+            elif echo "$REVIEW_OUTPUT" | grep -qi "network\|connection\|timeout"; then
+                print_status "error" "[$CURRENT_PR/$TOTAL_PRS] 🌐 Network connectivity issue"
+            elif echo "$REVIEW_OUTPUT" | grep -qi "mcp.*not found\|server.*not available"; then
+                print_status "error" "[$CURRENT_PR/$TOTAL_PRS] ⚙️ MCP server issue - check GitHub MCP configuration"
+            fi
         fi
     elif [ "$SELECTED_TOOL" = "gemini" ]; then
-        if gemini -p "$(cat "$PROMPT_FILE")
+        print_status "info" "[$CURRENT_PR/$TOTAL_PRS] Executing Gemini CLI..."
+        REVIEW_OUTPUT=$(gemini -p "$(cat "$PROMPT_FILE")
 
 ## 🎯 CURRENT PULL REQUEST TO REVIEW:
 **URL**: $URL
 
-Please analyze this specific Pull Request URL." >/dev/null 2>&1; then
+Please analyze this specific Pull Request URL." 2>&1)
+        GEMINI_EXIT_CODE=$?
+        echo "$REVIEW_OUTPUT"
+        if [ $GEMINI_EXIT_CODE -eq 0 ]; then
             SUCCESS=true
+        else
+            print_status "error" "[$CURRENT_PR/$TOTAL_PRS] Gemini CLI failed with exit code: $GEMINI_EXIT_CODE"
         fi
     elif [ "$SELECTED_TOOL" = "codex" ]; then
-        if codex "$(cat "$PROMPT_FILE")
+        print_status "info" "[$CURRENT_PR/$TOTAL_PRS] Executing Codex CLI..."
+        REVIEW_OUTPUT=$(codex "$(cat "$PROMPT_FILE")
 
 ## 🎯 CURRENT PULL REQUEST TO REVIEW:
 **URL**: $URL
 
-Please analyze this specific Pull Request URL." >/dev/null 2>&1; then
+Please analyze this specific Pull Request URL." 2>&1)
+        CODEX_EXIT_CODE=$?
+        echo "$REVIEW_OUTPUT"
+        if [ $CODEX_EXIT_CODE -eq 0 ]; then
             SUCCESS=true
+        else
+            print_status "error" "[$CURRENT_PR/$TOTAL_PRS] Codex CLI failed with exit code: $CODEX_EXIT_CODE"
         fi
     fi
     
-    # Record result
-    if [ "$SUCCESS" = true ]; then
-        print_status "success" "[$CURRENT_PR/$TOTAL_PRS] ✅ Review completed for PR #$PR_NUMBER"
+    # Verify review was actually posted by checking output
+    REVIEW_POSTED=false
+    if [ "$SUCCESS" = true ] && [ -n "$REVIEW_OUTPUT" ]; then
+        if [ "$DEBUG_MODE" = true ]; then
+            print_status "info" "[$CURRENT_PR/$TOTAL_PRS] 🐛 Debug: Checking output for review posting indicators..."
+        fi
+        
+        # Check for indicators that review was posted successfully
+        if echo "$REVIEW_OUTPUT" | grep -qE "(review_posted.*true|review.*created|successfully.*posted|Review posted|review_id)" || \
+           echo "$REVIEW_OUTPUT" | grep -qE '("status".*"success"|review.*successful)'; then
+            REVIEW_POSTED=true
+            if [ "$DEBUG_MODE" = true ]; then
+                print_status "info" "[$CURRENT_PR/$TOTAL_PRS] 🐛 Debug: Found success indicators in output"
+            fi
+        elif echo "$REVIEW_OUTPUT" | grep -qE "(Error|Failed|error|failed|review_posted.*false)"; then
+            REVIEW_POSTED=false
+            print_status "warning" "[$CURRENT_PR/$TOTAL_PRS] ⚠️ CLI succeeded but review posting failed"
+            if [ "$DEBUG_MODE" = true ]; then
+                print_status "info" "[$CURRENT_PR/$TOTAL_PRS] 🐛 Debug: Found error indicators in output"
+                echo "$REVIEW_OUTPUT" | grep -E "(Error|Failed|error|failed|review_posted.*false)" | head -3
+            fi
+        else
+            print_status "warning" "[$CURRENT_PR/$TOTAL_PRS] ⚠️ Unable to verify if review was posted - check output above"
+            if [ "$DEBUG_MODE" = true ]; then
+                print_status "info" "[$CURRENT_PR/$TOTAL_PRS] 🐛 Debug: No clear success/failure indicators found"
+            fi
+        fi
+    elif [ "$DEBUG_MODE" = true ]; then
+        print_status "info" "[$CURRENT_PR/$TOTAL_PRS] 🐛 Debug: Cannot verify review posting - SUCCESS=$SUCCESS, OUTPUT_LENGTH=${#REVIEW_OUTPUT}"
+    fi
+    
+    # Record result based on actual review posting success
+    if [ "$SUCCESS" = true ] && [ "$REVIEW_POSTED" = true ]; then
+        print_status "success" "[$CURRENT_PR/$TOTAL_PRS] ✅ Review confirmed posted for PR #$PR_NUMBER"
         SUCCESSFUL_REVIEWS=$((SUCCESSFUL_REVIEWS + 1))
         REVIEW_RESULTS+=("✅ $URL - Review posted successfully")
+    elif [ "$SUCCESS" = true ] && [ "$REVIEW_POSTED" = false ]; then
+        print_status "error" "[$CURRENT_PR/$TOTAL_PRS] ❌ CLI ran but review posting failed for PR #$PR_NUMBER"
+        FAILED_REVIEWS=$((FAILED_REVIEWS + 1))
+        REVIEW_RESULTS+=("❌ $URL - Review posting failed")
     else
-        print_status "error" "[$CURRENT_PR/$TOTAL_PRS] ❌ Review failed for PR #$PR_NUMBER"
+        print_status "error" "[$CURRENT_PR/$TOTAL_PRS] ❌ CLI execution failed for PR #$PR_NUMBER"
         FAILED_REVIEWS=$((FAILED_REVIEWS + 1))
         REVIEW_RESULTS+=("❌ $URL - CLI execution failed")
     fi
