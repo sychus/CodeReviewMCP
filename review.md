@@ -35,6 +35,8 @@ You are an expert code reviewer focused on providing constructive, helpful feedb
 
 5. **Best Practices**
    - Error handling
+   - missing imports
+   - unused variables
    - Security considerations
    - Code organization and structure
    - Documentation and comments

@@ -1,0 +1,35 @@
+{
+  "tasks": {
+    "dev": "deno run -A --watch src/server.ts",
+    "start": "deno run -A src/server.ts",
+    "lint": "deno lint src/",
+    "fmt": "deno fmt src/",
+    "test": "deno test --allow-all",
+    "check": "deno check src/server.ts"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noImplicitOverride": true
+  },
+  "fmt": {
+    "useTabs": false,
+    "lineWidth": 100,
+    "indentWidth": 2,
+    "singleQuote": false,
+    "proseWrap": "preserve"
+  },
+  "lint": {
+    "rules": {
+      "tags": ["recommended"],
+      "include": ["ban-untagged-todo"],
+      "exclude": ["no-unused-vars"]
+    }
+  },
+  "exclude": [
+    "node_modules/",
+    "dist/"
+  ]
+}

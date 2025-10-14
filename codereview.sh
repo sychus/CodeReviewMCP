@@ -105,15 +105,36 @@ if $HAS_CODEX; then
     AVAILABLE_TOOLS+=("codex")
 fi
 
-if [ ${#AVAILABLE_TOOLS[@]} -gt 1 ]; then
-    print_status "info" "Multiple CLIs detected: ${AVAILABLE_TOOLS[*]}"
-    echo "Select which CLI to use for the review:"
-    select TOOL in "${AVAILABLE_TOOLS[@]}"; do
-        case $TOOL in
-            claude|gemini|codex) SELECTED_TOOL="$TOOL"; break ;;
-            *) echo "Invalid option. Please select a valid number." ;;
-        esac
-    done
+# Helper function to select CLI tool interactively or by default
+select_cli_tool() {
+    local tools=("${AVAILABLE_TOOLS[@]}")
+    if [ ${#tools[@]} -gt 1 ]; then
+        print_status "info" "Multiple CLIs detected: ${tools[*]}"
+        echo "Select which CLI to use for the review:"
+        select TOOL in "${tools[@]}"; do
+            case $TOOL in
+                claude|gemini|codex) SELECTED_TOOL="$TOOL"; break ;;
+                *) echo "Invalid option. Please select a valid number." ;;
+            esac
+        done
+    else
+        SELECTED_TOOL="${tools[0]}"
+        print_status "info" "Using $SELECTED_TOOL CLI."
+    fi
+}
+
+# Check if a preferred CLI is specified via environment variable
+if [ -n "$PREFERRED_CLI" ]; then
+    # Validate that the preferred CLI is available
+    if [[ " ${AVAILABLE_TOOLS[*]} " =~ " $PREFERRED_CLI " ]]; then
+        SELECTED_TOOL="$PREFERRED_CLI"
+        print_status "info" "Using preferred CLI: $SELECTED_TOOL"
+    else
+        print_status "warning" "Preferred CLI '$PREFERRED_CLI' not available. Available CLIs: ${AVAILABLE_TOOLS[*]}"
+        select_cli_tool
+    fi
+elif [ ${#AVAILABLE_TOOLS[@]} -gt 1 ]; then
+    select_cli_tool
 else
     SELECTED_TOOL="${AVAILABLE_TOOLS[0]}"
     print_status "info" "Using $SELECTED_TOOL CLI."
@@ -361,7 +382,39 @@ FAILED_REVIEWS=0
 REVIEW_RESULTS=()
 
 # Generate single reusable prompt file
-PROMPT_FILE="$(mktemp /tmp/codereview_prompt.XXXXXX.md)"
+PROMPT_FILE=""
+# Try to create temporary file with better error handling
+if command -v mktemp &> /dev/null; then
+    PROMPT_FILE="$(mktemp /tmp/codereview_prompt.XXXXXX.md 2>/dev/null)"
+    if [ -z "$PROMPT_FILE" ]; then
+        # Fallback: try without .md extension
+        PROMPT_FILE="$(mktemp /tmp/codereview_prompt.XXXXXX 2>/dev/null)"
+        if [ -z "$PROMPT_FILE" ]; then
+            # Last resort: use timestamp-based filename
+            PROMPT_FILE="/tmp/codereview_prompt_$(date +%s)_$$.md"
+            touch "$PROMPT_FILE" || {
+                print_status "error" "Failed to create temporary file in /tmp"
+                exit 1
+            }
+        fi
+    fi
+else
+    # mktemp not available, use timestamp-based filename
+    PROMPT_FILE="/tmp/codereview_prompt_$(date +%s)_$$.md"
+    touch "$PROMPT_FILE" || {
+        print_status "error" "Failed to create temporary file in /tmp"
+        exit 1
+    }
+fi
+
+# Set up cleanup trap
+cleanup_temp_file() {
+    if [ -n "$PROMPT_FILE" ] && [ -f "$PROMPT_FILE" ]; then
+        rm -f "$PROMPT_FILE"
+    fi
+}
+trap cleanup_temp_file EXIT INT TERM
+
 print_status "progress" "Generating reusable review prompt template..."
 
 if [ "$SELECTED_TOOL" = "claude" ]; then
