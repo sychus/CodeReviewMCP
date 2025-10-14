@@ -105,6 +105,24 @@ if $HAS_CODEX; then
     AVAILABLE_TOOLS+=("codex")
 fi
 
+# Helper function to select CLI tool interactively or by default
+select_cli_tool() {
+    local tools=("${AVAILABLE_TOOLS[@]}")
+    if [ ${#tools[@]} -gt 1 ]; then
+        print_status "info" "Multiple CLIs detected: ${tools[*]}"
+        echo "Select which CLI to use for the review:"
+        select TOOL in "${tools[@]}"; do
+            case $TOOL in
+                claude|gemini|codex) SELECTED_TOOL="$TOOL"; break ;;
+                *) echo "Invalid option. Please select a valid number." ;;
+            esac
+        done
+    else
+        SELECTED_TOOL="${tools[0]}"
+        print_status "info" "Using $SELECTED_TOOL CLI."
+    fi
+}
+
 # Check if a preferred CLI is specified via environment variable
 if [ -n "$PREFERRED_CLI" ]; then
     # Validate that the preferred CLI is available
@@ -113,30 +131,10 @@ if [ -n "$PREFERRED_CLI" ]; then
         print_status "info" "Using preferred CLI: $SELECTED_TOOL"
     else
         print_status "warning" "Preferred CLI '$PREFERRED_CLI' not available. Available CLIs: ${AVAILABLE_TOOLS[*]}"
-        # Fall back to selection logic
-        if [ ${#AVAILABLE_TOOLS[@]} -gt 1 ]; then
-            print_status "info" "Multiple CLIs detected: ${AVAILABLE_TOOLS[*]}"
-            echo "Select which CLI to use for the review:"
-            select TOOL in "${AVAILABLE_TOOLS[@]}"; do
-                case $TOOL in
-                    claude|gemini|codex) SELECTED_TOOL="$TOOL"; break ;;
-                    *) echo "Invalid option. Please select a valid number." ;;
-                esac
-            done
-        else
-            SELECTED_TOOL="${AVAILABLE_TOOLS[0]}"
-            print_status "info" "Using $SELECTED_TOOL CLI."
-        fi
+        select_cli_tool
     fi
 elif [ ${#AVAILABLE_TOOLS[@]} -gt 1 ]; then
-    print_status "info" "Multiple CLIs detected: ${AVAILABLE_TOOLS[*]}"
-    echo "Select which CLI to use for the review:"
-    select TOOL in "${AVAILABLE_TOOLS[@]}"; do
-        case $TOOL in
-            claude|gemini|codex) SELECTED_TOOL="$TOOL"; break ;;
-            *) echo "Invalid option. Please select a valid number." ;;
-        esac
-    done
+    select_cli_tool
 else
     SELECTED_TOOL="${AVAILABLE_TOOLS[0]}"
     print_status "info" "Using $SELECTED_TOOL CLI."

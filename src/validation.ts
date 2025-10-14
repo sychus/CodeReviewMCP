@@ -7,7 +7,7 @@ import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 // GitHub PR URL schema
 const GitHubPRSchema = z.string().url().refine(
   (url) => {
-    const regex = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
+    const regex = /^https:\/\/github\.com\/[\w._-]+\/[\w._-]+\/pull\/\d+$/;
     return regex.test(url);
   },
   { message: "Must be a valid GitHub PR URL (https://github.com/owner/repo/pull/123)" }
