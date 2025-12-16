@@ -38,27 +38,114 @@ Transform your code review process with intelligent automation that analyzes sin
 - **Gemini CLI** (optional, for Google Gemini support)
 - **Codex CLI** (optional, for OpenAI Codex support)
 - **Docker** - Required for running MCP servers
-- **GitHub Personal Access Token** - For API access
+- **GitHub Authentication** - Personal Access Token (PAT) or GitHub App (see authentication options below)
 - **GitHub MCP Server** configured with Claude, Gemini, or Codex (see setup below)
 
 ### MCP Configuration
 
 Before using this tool, you need to configure the GitHub MCP server with Claude Code, Gemini, or Codex. For detailed instructions, visit the [Claude Code project](https://github.com/anthropics/claude-code), your Gemini CLI documentation, or Codex CLI documentation.
 
-#### 1. **Setup GitHub MCP Server**
+#### 1. **GitHub Authentication Setup**
 
-First, create a GitHub Personal Access Token:
+Choose one of the following authentication methods:
+
+##### **Option A: Personal Access Token (PAT) - Recommended for Individual Use**
+
+Create a GitHub Personal Access Token:
 - Go to GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
 - Generate a new token with the following scopes: `repo`, `pull_requests`, `issues`
 
 Then configure the GitHub MCP server:
 ```bash
-claude mcp add github -s user -e GITHUB_PERSONAL_ACCESS_TOKEN=$MY_GITHUB_ACCESS_TOKEN... -- docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server
+claude mcp add github -s user -e GITHUB_PERSONAL_ACCESS_TOKEN=$MY_GITHUB_ACCESS_TOKEN -- docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server
 ```
-For Gemini, follow the Gemini CLI instructions for MCP setup.
-For Codex, configure MCP in your `~/.codex/config.toml` file.
 
-Replace `$MY_GITHUB_ACCESS_TOKEN...` with your actual GitHub Personal Access Token.
+##### **Option B: GitHub App - Recommended for Organizations**
+
+GitHub Apps provide enhanced security, better rate limits, and organization-level permissions:
+
+**Step 1: Create a GitHub App**
+1. Go to GitHub Settings → Developer settings → GitHub Apps → New GitHub App
+2. Fill in the required fields:
+   - **App name**: `CodeReview-MCP-YourOrg` (choose a unique name)
+   - **Homepage URL**: Your organization's URL or repository URL
+   - **Webhook URL**: Leave blank (not needed for this use case)
+   - **Webhook secret**: Leave blank
+3. Set **Repository permissions**:
+   - **Contents**: Read
+   - **Issues**: Write
+   - **Metadata**: Read
+   - **Pull requests**: Write
+4. Set **Account permissions**: None required
+5. **Where can this GitHub App be installed?**: Choose based on your needs
+   - "Only on this account" for personal use
+   - "Any account" for broader distribution
+6. Click **Create GitHub App**
+
+**Step 2: Generate Private Key**
+1. After creating the app, scroll down to **Private keys**
+2. Click **Generate a private key**
+3. Download and securely store the `.pem` file
+
+**Step 3: Install the App**
+1. Go to **Install App** tab in your GitHub App settings
+2. Install it on your account/organization
+3. Choose **All repositories** or **Selected repositories** as needed
+4. Note the **Installation ID** from the URL (e.g., `https://github.com/settings/installations/12345678`)
+
+**Step 4: Configure MCP Server with GitHub App**
+
+**Option 4a: Automated Setup (Recommended)**
+Use the provided helper script for easy configuration:
+```bash
+./setup-github-app.sh
+```
+The script will guide you through the configuration process and set up the MCP server automatically.
+
+**Option 4b: Manual Setup**
+```bash
+claude mcp add github -s user \
+  -e GITHUB_APP_ID=$YOUR_APP_ID \
+  -e GITHUB_PRIVATE_KEY="$(cat path/to/your/private-key.pem)" \
+  -e GITHUB_INSTALLATION_ID=$YOUR_INSTALLATION_ID \
+  -- docker run -i --rm \
+  -e GITHUB_APP_ID \
+  -e GITHUB_PRIVATE_KEY \
+  -e GITHUB_INSTALLATION_ID \
+  ghcr.io/github/github-mcp-server
+```
+
+**Environment Variables for GitHub App:**
+- `GITHUB_APP_ID`: Your GitHub App ID (found in app settings)
+- `GITHUB_PRIVATE_KEY`: Contents of your private key file
+- `GITHUB_INSTALLATION_ID`: Installation ID from step 3
+
+##### **For Gemini and Codex Users**
+- **Gemini**: Follow similar authentication setup in your Gemini CLI MCP configuration
+- **Codex**: Configure authentication in your `~/.codex/config.toml` file using either PAT or GitHub App credentials
+
+##### **Authentication Method Comparison**
+
+| Feature | Personal Access Token (PAT) | GitHub App |
+|---------|----------------------------|------------|
+| **Setup Complexity** | ⭐ Simple | ⭐⭐ Moderate |
+| **Security** | ⭐⭐ Good | ⭐⭐⭐ Excellent |
+| **Rate Limits** | 5,000 requests/hour | 15,000 requests/hour |
+| **Organization Control** | ⭐⭐ Limited | ⭐⭐⭐ Full control |
+| **Audit Trail** | ⭐⭐ User-based | ⭐⭐⭐ App-based |
+| **Token Expiration** | Manual renewal | Automatic JWT generation |
+| **Recommended For** | Individual developers | Teams & Organizations |
+
+**Choose PAT if:**
+- You're an individual developer
+- You want quick setup
+- You have simple authentication needs
+
+**Choose GitHub App if:**
+- You're part of an organization
+- You need enhanced security and audit trails
+- You want higher rate limits
+- You need fine-grained permissions control
 
 #### 2. **Verify MCP Configuration**
 
@@ -84,9 +171,10 @@ You should see `github` in the list of configured MCP servers.
    cd CodeReviewMCP
    ```
 
-2. **Make the script executable:**
+2. **Make the scripts executable:**
    ```bash
    chmod +x codereview.sh
+   chmod +x setup-github-app.sh  # For GitHub App setup
    ```
 
 ### Basic Usage
@@ -321,7 +409,8 @@ bash -n codereview.sh
 2. **GitHub MCP not configured**
    - Verify with: `claude mcp list`, `gemini mcp list`, or `codex mcp list`
    - If missing, follow the MCP Configuration section above
-   - Ensure your GitHub token has correct permissions (`repo`, `pull_requests`, `issues`)
+   - **For PAT**: Ensure your token has correct permissions (`repo`, `pull_requests`, `issues`)
+   - **For GitHub App**: Verify app has required permissions and is installed on target repositories
 
 3. **Permission denied**
    ```bash
@@ -333,8 +422,36 @@ bash -n codereview.sh
    - Test with: `docker --version`
 
 5. **GitHub API rate limits**
-   - Use a GitHub Personal Access Token for higher rate limits
-   - Verify token is not expired
+   - **PAT users**: Consider upgrading to GitHub App for higher rate limits (15k vs 5k requests/hour)
+   - **GitHub App users**: Verify your app credentials are correctly configured
+   - Check if token/app credentials are expired
+
+6. **GitHub App specific issues**
+   - **Invalid JWT**: Ensure private key is correctly formatted and not corrupted
+   - **Installation not found**: Verify the GitHub App is installed on target organization/repositories
+   - **App ID mismatch**: Double-check your `GITHUB_APP_ID` matches the app settings
+   - **Private key issues**: Ensure the private key file is readable and contains full key including headers
+
+## 🔐 Security Best Practices
+
+### For Personal Access Tokens (PAT)
+- **Minimal Scopes**: Only grant necessary permissions (`repo`, `pull_requests`, `issues`)
+- **Regular Rotation**: Rotate tokens every 90 days or as per your organization's policy
+- **Secure Storage**: Never commit tokens to version control; use environment variables
+- **Monitoring**: Regularly review token usage in GitHub Settings → Developer settings
+
+### For GitHub Apps
+- **Private Key Security**: Store private keys securely, never in version control
+- **Key Rotation**: Regularly generate new private keys (GitHub allows multiple active keys)
+- **Installation Monitoring**: Regularly audit which repositories have the app installed
+- **Principle of Least Privilege**: Only grant permissions actually needed for code reviews
+- **Webhook Security**: If using webhooks, always validate signatures (though not needed for this tool)
+
+### General Security
+- **Environment Variables**: Use environment variables for all sensitive credentials
+- **Docker Security**: Ensure Docker daemon is secure if running MCP servers in containers
+- **Network Security**: Use HTTPS for all GitHub API communications (default)
+- **Audit Logs**: Regularly review GitHub audit logs for your organization
 
 6. **MCP server connection issues**
    ```bash
