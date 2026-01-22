@@ -210,6 +210,8 @@ execute_automated_claude_review() {
 - github:get_pull_request
 - github:get_pull_request_files  
 - github:get_file_contents
+- github:get_pull_request_reviews
+- github:get_pull_request_comments
 - github:create_pull_request_review
 
 ---
@@ -221,19 +223,36 @@ $context_content
 ### Required Actions (Execute in sequence):
 
 1. **Parse URL**: Extract owner, repo, and pull request number from the provided GitHub PR URL
-2. **Get PR Details**: Use GitHub MCP tool \`github:get_pull_request\` with the extracted owner, repo, and pull_number
-3. **Get PR Files**: Use GitHub MCP tool \`github:get_pull_request_files\` with the extracted owner, repo, and pull_number  
-4. **Analyze Key Files**: Use GitHub MCP tool \`github:get_file_contents\` for the most important changed files (max 3-5 files)
-5. **Generate Review**: Create comprehensive code review following the specified format (DO NOT include any footer or signature such as "Generated with Claude Code")
-6. **Post Review**: Use GitHub MCP tool \`github:create_pull_request_review\` with the extracted owner, repo, and pull_number
+2. **Get PR Details**: Use \`github:get_pull_request\` and extract the current **head SHA** (latest commit SHA)
+3. **Check Previous Reviews (Professional Consistency)**:
+   - Use \`github:get_pull_request_reviews\` and \`github:get_pull_request_comments\`
+   - Search for any previous reviews/comments authored by this automation that contain this marker: \`CodeReviewMCP\`
+   - Marker format to look for in bodies: \`<!-- CodeReviewMCP: head_sha=... -->\`
+   - If you find a previous CodeReviewMCP marker with the **same head_sha as current PR head**, then:
+     - Set \`already_reviewed=true\` and \`skipped=true\`
+     - Do NOT re-analyze or re-post another redundant review
+     - Return the required JSON output (see below) with \`review_posted=false\` and a short summary like "No new commits since last CodeReviewMCP review"
+4. **Get PR Files (Diff)**: If NOT skipped, use \`github:get_pull_request_files\` to get the diff (primary evidence source)
+5. **Analyze Key Files**: Use \`github:get_file_contents\` only when needed to confirm behavior or when diff is truncated (max 3-5 files)
+6. **Incremental Review Rules (Avoid Hallucinations)**:
+   - ONLY report issues that have explicit evidence in the diff or in fetched file contents
+   - If an issue was already mentioned in a previous CodeReviewMCP review, do NOT re-report it unless it is still present in the current diff/content
+   - If new changes were made to address prior feedback, verify they did not introduce regressions (new bugs, security or perf issues) caused by those edits
+7. **Generate Review**: Create a comprehensive code review following the specified format (NO footer/signature)
+8. **Post Review**: Use \`github:create_pull_request_review\` with:
    - body: [Complete review content]
    - event: "COMMENT" or "REQUEST_CHANGES" or "APPROVE" based on findings
+   - IMPORTANT: Include this marker at the very top or very bottom of the review body:
+     \`<!-- CodeReviewMCP: head_sha=<current_head_sha> -->\`
 
 ### Output Format Required:
 \`\`\`json
 {
   \"status\": \"success|error\",
   \"review_posted\": true|false,
+  \"skipped\": true|false,
+  \"already_reviewed\": true|false,
+  \"head_sha\": \"current_head_sha_if_available\",
   \"review_id\": \"review_id_if_successful\",
   \"event_type\": \"COMMENT|REQUEST_CHANGES|APPROVE\",
   \"files_analyzed\": number,
@@ -268,6 +287,8 @@ execute_automated_gemini_review() {
 - github:get_pull_request OR mcp_github_get_pull_request
 - github:get_pull_request_files OR mcp_github_get_pull_request_files  
 - github:get_file_contents OR mcp_github_get_file_contents
+- github:get_pull_request_reviews OR mcp_github_get_pull_request_reviews
+- github:get_pull_request_comments OR mcp_github_get_pull_request_comments
 - github:create_pull_request_review OR mcp_github_create_pull_request_review
 
 ---
@@ -279,19 +300,31 @@ $context_content
 ### Required Actions (Execute in sequence):
 
 1. **Parse URL**: Extract owner, repo, and pull request number from the provided GitHub PR URL
-2. **Get PR Details**: Use available GitHub MCP tool (try \`github:get_pull_request\` first, if not available use \`mcp_github_get_pull_request\`) with the extracted owner, repo, and pull_number
-3. **Get PR Files**: Use available GitHub MCP tool (try \`github:get_pull_request_files\` first, if not available use \`mcp_github_get_pull_request_files\`) with the extracted owner, repo, and pull_number  
-4. **Analyze Key Files**: Use available GitHub MCP tool (try \`github:get_file_contents\` first, if not available use \`mcp_github_get_file_contents\`) for the most important changed files (max 3-5 files)
-5. **Generate Review**: Create comprehensive code review following the specified format (DO NOT include any footer or signature such as "Generated with Gemini")
-6. **Post Review**: Use available GitHub MCP tool (try \`github:create_pull_request_review\` first, if not available use \`mcp_github_create_pull_request_review\`) with the extracted owner, repo, and pull_number
+2. **Get PR Details**: Use \`github:get_pull_request\` (or \`mcp_github_get_pull_request\`) and extract the current **head SHA**
+3. **Check Previous Reviews (Professional Consistency)**:
+   - Use \`github:get_pull_request_reviews\` / \`mcp_github_get_pull_request_reviews\` and \`github:get_pull_request_comments\` / \`mcp_github_get_pull_request_comments\`
+   - Find previous CodeReviewMCP markers: \`<!-- CodeReviewMCP: head_sha=... -->\`
+   - If current head_sha was already reviewed by CodeReviewMCP, set \`already_reviewed=true\`, \`skipped=true\`, do NOT post a redundant review, and return JSON with \`review_posted=false\`
+4. **Get PR Files**: If NOT skipped, use \`github:get_pull_request_files\` / \`mcp_github_get_pull_request_files\` to get the diff
+5. **Analyze Key Files**: Use \`github:get_file_contents\` / \`mcp_github_get_file_contents\` only when needed (max 3-5 files)
+6. **Incremental Review Rules (Avoid Hallucinations)**:
+   - Only report issues you can quote from diff or fetched contents
+   - Do not re-report prior issues unless still present
+   - Verify fixes did not introduce new issues
+7. **Generate Review**: Create comprehensive code review following the specified format (NO footer/signature)
+8. **Post Review**: Use \`github:create_pull_request_review\` / \`mcp_github_create_pull_request_review\` with:
    - body: [Complete review content]
    - event: "COMMENT" or "REQUEST_CHANGES" or "APPROVE" based on findings
+   - Include marker: \`<!-- CodeReviewMCP: head_sha=<current_head_sha> -->\`
 
 ### Output Format Required:
 \`\`\`json
 {
   \"status\": \"success|error\",
   \"review_posted\": true|false,
+  \"skipped\": true|false,
+  \"already_reviewed\": true|false,
+  \"head_sha\": \"current_head_sha_if_available\",
   \"review_id\": \"review_id_if_successful\",
   \"event_type\": \"COMMENT|REQUEST_CHANGES|APPROVE\",
   \"files_analyzed\": number,
@@ -326,6 +359,8 @@ execute_automated_codex_review() {
 - github:get_pull_request OR mcp_github_get_pull_request
 - github:get_pull_request_files OR mcp_github_get_pull_request_files  
 - github:get_file_contents OR mcp_github_get_file_contents
+- github:get_pull_request_reviews OR mcp_github_get_pull_request_reviews
+- github:get_pull_request_comments OR mcp_github_get_pull_request_comments
 - github:create_pull_request_review OR mcp_github_create_pull_request_review
 
 ---
@@ -334,30 +369,30 @@ $context_content
 
 ## 🤖 AUTOMATED EXECUTION MODE
 
-### GitHub Information
-- **URL**: $url
-- **Owner**: $owner  
-- **Repository**: $repo
-- **Pull Request**: #$pr_number
-
 ### Required Actions (Execute in sequence):
 
-1. **Get PR Details**: Use available GitHub MCP tool (try \`github:get_pull_request\` first, if not available use \`mcp_github_get_pull_request\`) with owner: "$owner", repo: "$repo", pull_number: $pr_number
-2. **Get PR Files**: Use available GitHub MCP tool (try \`github:get_pull_request_files\` first, if not available use \`mcp_github_get_pull_request_files\`) with owner: "$owner", repo: "$repo", pull_number: $pr_number  
-3. **Analyze Key Files**: Use available GitHub MCP tool (try \`github:get_file_contents\` first, if not available use \`mcp_github_get_file_contents\`) for the most important changed files (max 3-5 files)
-4. **Generate Review**: Create comprehensive code review following the specified format (DO NOT include any footer or signature such as "Generated with Codex")
-5. **Post Review**: Use available GitHub MCP tool (try \`github:create_pull_request_review\` first, if not available use \`mcp_github_create_pull_request_review\`) with:
-   - owner: "$owner"
-   - repo: "$repo" 
-   - pull_number: $pr_number
+1. **Parse URL**: Extract owner, repo, and pull request number from the provided GitHub PR URL
+2. **Get PR Details**: Use \`github:get_pull_request\` (or \`mcp_github_get_pull_request\`) and extract the current **head SHA**
+3. **Check Previous Reviews**:
+   - Use \`github:get_pull_request_reviews\` / \`mcp_github_get_pull_request_reviews\` and \`github:get_pull_request_comments\` / \`mcp_github_get_pull_request_comments\`
+   - Look for \`<!-- CodeReviewMCP: head_sha=... -->\` in past bodies
+   - If current head_sha already reviewed: set \`already_reviewed=true\`, \`skipped=true\`, do NOT post a redundant review, return JSON with \`review_posted=false\`
+4. **Get PR Files**: If NOT skipped, use \`github:get_pull_request_files\` / \`mcp_github_get_pull_request_files\` to get the diff
+5. **Analyze Key Files**: Use \`github:get_file_contents\` / \`mcp_github_get_file_contents\` only when needed (max 3-5 files)
+6. **Generate Review**: Create comprehensive code review following the specified format (NO footer/signature)
+7. **Post Review**: Use \`github:create_pull_request_review\` / \`mcp_github_create_pull_request_review\` with:
    - body: [Complete review content]
    - event: "COMMENT" or "REQUEST_CHANGES" or "APPROVE" based on findings
+   - Include marker: \`<!-- CodeReviewMCP: head_sha=<current_head_sha> -->\`
 
 ### Output Format Required:
 \`\`\`json
 {
   \"status\": \"success|error\",
   \"review_posted\": true|false,
+  \"skipped\": true|false,
+  \"already_reviewed\": true|false,
+  \"head_sha\": \"current_head_sha_if_available\",
   \"review_id\": \"review_id_if_successful\",
   \"event_type\": \"COMMENT|REQUEST_CHANGES|APPROVE\",
   \"files_analyzed\": number,
@@ -530,8 +565,9 @@ Please analyze this specific Pull Request URL." 2>&1)
         fi
     fi
     
-    # Verify review was actually posted by checking output
+    # Verify review was actually posted OR intentionally skipped (already reviewed)
     REVIEW_POSTED=false
+    REVIEW_SKIPPED=false
     if [ "$SUCCESS" = true ] && [ -n "$REVIEW_OUTPUT" ]; then
         if [ "$DEBUG_MODE" = true ]; then
             print_status "info" "[$CURRENT_PR/$TOTAL_PRS] 🐛 Debug: Checking output for review posting indicators..."
@@ -543,6 +579,12 @@ Please analyze this specific Pull Request URL." 2>&1)
             REVIEW_POSTED=true
             if [ "$DEBUG_MODE" = true ]; then
                 print_status "info" "[$CURRENT_PR/$TOTAL_PRS] 🐛 Debug: Found success indicators in output"
+            fi
+        # Check for explicit skip indicators (already reviewed, no new commits)
+        elif echo "$REVIEW_OUTPUT" | grep -qE '("skipped"\s*:\s*true|"already_reviewed"\s*:\s*true|No new commits since last CodeReviewMCP review)'; then
+            REVIEW_SKIPPED=true
+            if [ "$DEBUG_MODE" = true ]; then
+                print_status "info" "[$CURRENT_PR/$TOTAL_PRS] 🐛 Debug: Found skip indicators in output"
             fi
         elif echo "$REVIEW_OUTPUT" | grep -qE "(Error|Failed|error|failed|review_posted.*false)"; then
             REVIEW_POSTED=false
@@ -561,11 +603,15 @@ Please analyze this specific Pull Request URL." 2>&1)
         print_status "info" "[$CURRENT_PR/$TOTAL_PRS] 🐛 Debug: Cannot verify review posting - SUCCESS=$SUCCESS, OUTPUT_LENGTH=${#REVIEW_OUTPUT}"
     fi
     
-    # Record result based on actual review posting success
+    # Record result based on actual review posting success (or intentional skip)
     if [ "$SUCCESS" = true ] && [ "$REVIEW_POSTED" = true ]; then
         print_status "success" "[$CURRENT_PR/$TOTAL_PRS] ✅ Review confirmed posted for PR #$PR_NUMBER"
         SUCCESSFUL_REVIEWS=$((SUCCESSFUL_REVIEWS + 1))
         REVIEW_RESULTS+=("✅ $URL - Review posted successfully")
+    elif [ "$SUCCESS" = true ] && [ "$REVIEW_SKIPPED" = true ]; then
+        print_status "success" "[$CURRENT_PR/$TOTAL_PRS] ✅ Skipped (already reviewed) for PR #$PR_NUMBER"
+        SUCCESSFUL_REVIEWS=$((SUCCESSFUL_REVIEWS + 1))
+        REVIEW_RESULTS+=("✅ $URL - Skipped (already reviewed, no new commits)")
     elif [ "$SUCCESS" = true ] && [ "$REVIEW_POSTED" = false ]; then
         print_status "error" "[$CURRENT_PR/$TOTAL_PRS] ❌ CLI ran but review posting failed for PR #$PR_NUMBER"
         FAILED_REVIEWS=$((FAILED_REVIEWS + 1))
